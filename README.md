@@ -60,9 +60,11 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 2. Select all, delete, paste in the contents of `Code.gs` from this repo
 3. Save with **Cmd+S** / **Ctrl+S**
 
+Next we need to add three additional files to the script. Follow the next steps for each of the three files, one after another.
+
 **Index.html**, **Leaderboard.html**, **History.html** (add as new files):
 1. Click the **+** next to "Files" > **HTML**
-2. Name it exactly as shown (no extension -- Apps Script adds `.html` automatically)
+2. Name it exactly as shown (no extension -- Apps Script adds `.html` automatically). For instance, when adding the HTML file for the index.html code, just name it "index".
 3. Delete the placeholder content, paste in the file contents from this repo
 4. Save
 5. Repeat for each file
