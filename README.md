@@ -73,7 +73,7 @@ When done you should have four files in the left panel: `Code.gs`, `Index.html`,
 
 ### Step 4 -- Bootstrap the spreadsheet
 
-1. Select **`bootstrapSheets`** from the function dropdown at the top of the editor (it will probably be defaulted to "doPost" or something similar.
+1. Select **`bootstrapSheets`** from the function dropdown at the top of the editor (it will probably be defaulted to "doPost" or something similar.)
 2. Click **Run**
 3. Accept the permissions prompt -- click **Review permissions > your Gmail account > Advanced > Go to Rollcall (unsafe) > Allow**
 
