@@ -1187,6 +1187,7 @@ function setSoundEnabled(enabled) {
   _soundEnabled = enabled;
   document.getElementById('sound-label').textContent = enabled ? 'On' : 'Off';
   document.getElementById('sound-label').style.color = enabled ? 'var(--green)' : 'var(--text-dim)';
+  try { localStorage.setItem('rollcall_sound', enabled ? '1' : '0'); } catch(e) {}
   if (enabled && !_audioCtx) {
     try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
   }
@@ -1323,6 +1324,16 @@ function playSound(name) {
 }
 
 // ── Init ──────────────────────────────────────────────────────
+// Restore sound preference from last session
+try {
+  const saved = localStorage.getItem('rollcall_sound');
+  if (saved !== null) {
+    _soundEnabled = saved === '1';
+    document.getElementById('sound-toggle').checked = _soundEnabled;
+    document.getElementById('sound-label').textContent = _soundEnabled ? 'On' : 'Off';
+    document.getElementById('sound-label').style.color = _soundEnabled ? 'var(--green)' : 'var(--text-dim)';
+  }
+} catch(e) {}
 refreshHome();
 startHomePolling();
 </script>
