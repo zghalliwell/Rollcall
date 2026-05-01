@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Initiative Leaderboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a40;
+    --border-bright: #4a4a80;
+    --purple-dim: #4a3f8a;
+    --purple-mid: #7b6fd4;
+    --purple-bright: #a394f0;
+    --purple-glow: #c4b8ff;
+    --text: #e8e4ff;
+    --text-muted: #8880bb;
+    --text-dim: #5550a0;
+    --gold: #d4aa44;
+    --gold-dim: #8a6e22;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; padding:1.5rem; }
+
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; }
+  h1 { font-family:'Cinzel',serif; font-size:1.5rem; color:var(--purple-glow); letter-spacing:0.08em; }
+  .quarter-badge { background:var(--surface2); border:1px solid var(--border-bright); border-radius:20px; padding:0.2rem 0.75rem; font-size:0.78rem; color:var(--purple-bright); letter-spacing:0.08em; text-transform:uppercase; font-weight:600; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
+
+  .leaderboard-row { display:flex; align-items:center; gap:12px; padding:0.65rem 0; border-bottom:1px solid var(--border); }
+  .leaderboard-row:last-child { border-bottom:none; }
+
+  .rank-badge { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:0.85rem; font-weight:600; flex-shrink:0; border:1px solid var(--border); color:var(--text-muted); background:var(--surface2); }
+  .rank-badge.gold { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
+  .rank-badge.silver { background:#2a2a3a; border-color:#8888aa; color:#8888aa; }
+  .rank-badge.bronze { background:#2a1e12; border-color:#aa7744; color:#aa7744; }
+
+  .avg-bar { height:5px; border-radius:3px; background:var(--purple-dim); }
+
+  .updated { font-size:0.75rem; color:var(--text-dim); text-align:center; margin-top:1rem; }
+  .empty { text-align:center; color:var(--text-dim); padding:1.5rem 0; font-size:0.9rem; }
+
+  .note { font-size:0.72rem; color:var(--text-dim); text-align:center; margin-top:0.5rem; letter-spacing:0.05em; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚔ Initiative Leaderboard</h1>
+  <span id="quarter-badge" class="quarter-badge">—</span>
+</div>
+
+<div class="card">
+  <div id="leaderboard-list"><div class="empty">Loading...</div></div>
+</div>
+
+<div class="updated" id="updated-text"></div>
+<div class="note">Ranked by Bayesian average · Updates every 60 seconds</div>
+
+<script>
+function renderLeaderboard(lb) {
+  document.getElementById('quarter-badge').textContent = lb.quarter || '—';
+  const el = document.getElementById('leaderboard-list');
+  const entries = lb.members || [];
+  const withRolls = entries.filter(e => e.count > 0);
+  if (withRolls.length === 0) {
+    el.innerHTML = '<div class="empty">No rolls this quarter yet.</div>';
+    return;
+  }
+  const maxScore = Math.max(...entries.filter(e => e.bayesian).map(e => e.bayesian), 1);
+  el.innerHTML = entries.map((e, i) => {
+    const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    const score = e.bayesian;
+    const pct = score ? (score / maxScore * 100).toFixed(0) : 0;
+    const scoreStr = score ? score.toFixed(1) : '—';
+    const countStr = e.count > 0 ? `${e.count} roll${e.count!==1?'s':''}` : 'no rolls';
+    return `<div class="leaderboard-row">
+      <div class="rank-badge ${rankClass}">${i+1}</div>
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+          <span style="font-weight:500;font-size:1rem;">${e.name}</span>
+          <span style="font-size:0.75rem;color:var(--text-dim);">${countStr}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+            <div class="avg-bar" style="width:${pct}%;${i===0?'background:var(--gold);':''}"></div>
+          </div>
+          <span style="font-size:0.9rem;color:${i===0?'var(--gold)':'var(--text-muted)'};min-width:42px;text-align:right;font-weight:500;">${scoreStr}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('updated-text').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+}
+
+function refresh() {
+  google.script.run
+    .withSuccessHandler(data => { if (data) renderLeaderboard(data.leaderboard); })
+    .withFailureHandler(() => {})
+    .poll();
+}
+
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>

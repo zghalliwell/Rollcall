@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roll for Initiative</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a40;
+    --border-bright: #4a4a80;
+    --purple-dim: #4a3f8a;
+    --purple-mid: #7b6fd4;
+    --purple-bright: #a394f0;
+    --purple-glow: #c4b8ff;
+    --text: #e8e4ff;
+    --text-muted: #8880bb;
+    --text-dim: #5550a0;
+    --gold: #d4aa44;
+    --gold-dim: #8a6e22;
+    --red: #e05060;
+    --green: #50d090;
+    --orange: #e09050;
+    --transition: 0.2s ease;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; min-height: 100vh; font-size: 16px; line-height: 1.5; }
+
+  .screen { display: none; padding: 2rem 1.5rem; max-width: 700px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+  .screen.active { display: block; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes rollIn { from { opacity:0; transform:scale(0.85); } to { opacity:1; transform:scale(1); } }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  h1 { font-family:'Cinzel',serif; font-size:2rem; font-weight:700; color:var(--purple-glow); text-align:center; letter-spacing:0.08em; margin-bottom:0.25rem; }
+  h2 { font-family:'Cinzel',serif; font-size:1.3rem; font-weight:600; color:var(--purple-bright); letter-spacing:0.05em; }
+  .subtitle { text-align:center; color:var(--text-muted); font-size:0.85rem; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:2rem; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; margin-bottom:1rem; }
+  .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; }
+
+  button { font-family:'Rajdhani',sans-serif; font-size:1rem; font-weight:600; cursor:pointer; border:1px solid var(--border-bright); border-radius:8px; padding:0.6rem 1.4rem; transition:all var(--transition); letter-spacing:0.05em; }
+  .btn-primary { background:var(--purple-dim); color:var(--purple-glow); border-color:var(--purple-mid); }
+  .btn-primary:hover:not(:disabled) { background:var(--purple-mid); color:#fff; border-color:var(--purple-bright); }
+  .btn-primary:disabled { opacity:0.35; cursor:not-allowed; }
+  .btn-ghost { background:transparent; color:var(--text-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface2); color:var(--text); border-color:var(--border-bright); }
+  .btn-danger { background:transparent; color:var(--red); border-color:transparent; padding:0.2rem 0.5rem; font-size:0.85rem; }
+  .btn-danger:hover { background:rgba(224,80,96,0.1); border-color:var(--red); }
+  .btn-large { width:100%; padding:1rem; font-size:1.3rem; letter-spacing:0.1em; font-family:'Cinzel',serif; font-weight:600; }
+
+  input[type=number] { background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Rajdhani',sans-serif; font-size:1.1rem; font-weight:500; padding:0.4rem 0.6rem; width:72px; text-align:center; transition:border-color var(--transition); }
+  input[type=number]:focus { outline:none; border-color:var(--purple-mid); }
+  input[type=number]:disabled { opacity:0.3; }
+  input[type=text] { background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Rajdhani',sans-serif; font-size:1rem; padding:0.5rem 0.75rem; flex:1; transition:border-color var(--transition); }
+  input[type=text]:focus { outline:none; border-color:var(--purple-mid); }
+
+  .toggle { position:relative; width:40px; height:22px; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; inset:0; background:var(--surface2); border:1px solid var(--border-bright); border-radius:22px; cursor:pointer; transition:all 0.25s; }
+  .toggle-slider::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:var(--text-muted); border-radius:50%; transition:all 0.25s; }
+  .toggle input:checked + .toggle-slider { background:var(--purple-dim); border-color:var(--purple-mid); }
+  .toggle input:checked + .toggle-slider::before { transform:translateX(18px); background:var(--purple-glow); }
+
+  .roll-row { display:flex; align-items:center; gap:12px; padding:0.75rem 0; border-bottom:1px solid var(--border); }
+  .roll-row:last-child { border-bottom:none; }
+  .name-label { flex:1; font-size:1.05rem; font-weight:500; }
+
+  .rank-badge { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:0.85rem; font-weight:600; flex-shrink:0; border:1px solid var(--border); color:var(--text-muted); background:var(--surface2); }
+  .rank-badge.gold { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
+  .rank-badge.silver { background:#2a2a3a; border-color:#8888aa; color:#8888aa; }
+  .rank-badge.bronze { background:#2a1e12; border-color:#aa7744; color:#aa7744; }
+
+  .leaderboard-row { display:flex; align-items:center; gap:12px; padding:0.65rem 0; border-bottom:1px solid var(--border); }
+  .leaderboard-row:last-child { border-bottom:none; }
+  .avg-bar { height:5px; border-radius:3px; background:var(--purple-dim); transition:width 0.6s ease; }
+
+  .result-row { display:flex; align-items:center; gap:14px; padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.5rem; background:var(--surface2); border:1px solid var(--border); animation:rollIn 0.35s ease both; }
+  .result-row .roll-num { font-size:1.3rem; font-family:'Cinzel',serif; font-weight:600; color:var(--purple-bright); min-width:32px; text-align:right; }
+  .result-row .result-name { flex:1; font-size:1.1rem; font-weight:500; }
+  .result-row .dice-roll { font-size:0.8rem; color:var(--text-dim); }
+
+  .prev-order-row { display:flex; align-items:center; gap:10px; padding:0.45rem 0; border-bottom:1px solid var(--border); font-size:0.95rem; }
+  .prev-order-row:last-child { border-bottom:none; }
+  .prev-pos { color:var(--text-dim); min-width:20px; font-size:0.85rem; }
+
+  .quarter-badge { display:inline-block; background:var(--surface2); border:1px solid var(--border-bright); border-radius:20px; padding:0.2rem 0.75rem; font-size:0.78rem; color:var(--purple-bright); letter-spacing:0.08em; text-transform:uppercase; font-weight:600; margin-left:8px; }
+  .section-label { font-size:0.75rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:0.5rem; }
+  .add-row { display:flex; gap:8px; margin-top:0.75rem; }
+  .manage-row { display:flex; align-items:center; justify-content:space-between; padding:0.55rem 0; border-bottom:1px solid var(--border); }
+  .manage-row:last-child { border-bottom:none; }
+
+  .name-btn { background:var(--surface); border:1px solid var(--border-bright); border-radius:10px; padding:1rem; font-size:1.1rem; font-weight:500; color:var(--text); font-family:'Rajdhani',sans-serif; cursor:pointer; transition:all 0.2s; text-align:center; width:100%; letter-spacing:0.03em; }
+  .name-btn:hover { background:var(--purple-dim); border-color:var(--purple-mid); color:var(--purple-glow); }
+
+  .instruction-row { display:flex; align-items:flex-start; gap:12px; padding:0.5rem 0; border-bottom:1px solid var(--border); }
+  .instruction-row:last-child { border-bottom:none; }
+  .instruction-num { width:24px; height:24px; border-radius:50%; background:var(--purple-dim); border:1px solid var(--purple-mid); color:var(--purple-glow); font-family:'Cinzel',serif; font-size:0.8rem; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .instruction-text { font-size:0.92rem; color:var(--text-muted); line-height:1.5; }
+  .instruction-text strong { color:var(--purple-bright); font-weight:600; }
+  .rolloff-group { background:var(--surface2); border:1px solid var(--border-bright); border-radius:10px; padding:1rem; margin-bottom:1rem; }
+  .rolloff-tied-val { font-family:'Cinzel',serif; font-size:1.1rem; color:var(--purple-bright); font-weight:600; margin-bottom:0.75rem; }
+  .empty-state { text-align:center; color:var(--text-dim); padding:1.5rem 0; font-size:0.9rem; }
+  .d20-icon { font-size:3rem; text-align:center; margin:1rem 0 0.5rem; animation:pulse 3s infinite; }
+  .error-text { color:var(--red); font-size:0.85rem; margin-top:0.5rem; }
+  .present-label { color:var(--green); font-size:0.78rem; min-width:52px; }
+  .absent-label { color:var(--text-dim); font-size:0.78rem; min-width:52px; }
+
+  /* Waiting screen */
+  .waiting-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:1rem; }
+  .waiting-chip { display:flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:0.6rem 0.9rem; font-size:0.95rem; }
+  .waiting-chip .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .dot-done { background:var(--green); }
+  .dot-waiting { background:var(--border-bright); animation:pulse 1.5s infinite; }
+  .dot-rolloff { background:var(--orange); }
+
+  .spinner { width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--purple-mid); border-radius:50%; animation:spin 0.8s linear infinite; display:inline-block; vertical-align:middle; margin-right:8px; }
+
+  .poll-status { display:flex; align-items:center; font-size:0.78rem; color:var(--text-dim); margin-bottom:1rem; }
+
+  .rolloff-banner { background:rgba(74,63,138,0.2); border:1px solid var(--purple-dim); border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.9rem; color:var(--purple-bright); text-align:center; }
+
+  .my-roll-display { background:var(--surface2); border:1px solid var(--purple-dim); border-radius:8px; padding:0.6rem 1rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:10px; }
+  .my-roll-val { font-family:'Cinzel',serif; font-size:1.4rem; color:var(--purple-glow); font-weight:700; }
+
+  @media(max-width:480px) { .screen{padding:1.25rem 1rem;} h1{font-size:1.5rem;} .waiting-grid{grid-template-columns:1fr;} }
+
+  @keyframes diceShake {
+    0%   { transform: rotate(0deg)   scale(1)    translateY(0); }
+    10%  { transform: rotate(-15deg) scale(1.1)  translateY(-10px); }
+    20%  { transform: rotate(20deg)  scale(1.15) translateY(-20px); }
+    30%  { transform: rotate(-25deg) scale(1.2)  translateY(-15px); }
+    40%  { transform: rotate(30deg)  scale(1.25) translateY(-25px); }
+    50%  { transform: rotate(-20deg) scale(1.2)  translateY(-18px); }
+    60%  { transform: rotate(25deg)  scale(1.15) translateY(-12px); }
+    70%  { transform: rotate(-10deg) scale(1.1)  translateY(-8px); }
+    80%  { transform: rotate(15deg)  scale(1.05) translateY(-4px); }
+    90%  { transform: rotate(-5deg)  scale(1.02) translateY(-2px); }
+    100% { transform: rotate(0deg)   scale(1)    translateY(0); }
+  }
+
+  @keyframes diceGlow {
+    0%,100% { filter: drop-shadow(0 0 8px rgba(163,148,240,0.4)); color: var(--purple-bright); }
+    25%     { filter: drop-shadow(0 0 24px rgba(196,184,255,0.9)); color: var(--purple-glow); }
+    50%     { filter: drop-shadow(0 0 32px rgba(212,170,68,0.8));  color: var(--gold); }
+    75%     { filter: drop-shadow(0 0 24px rgba(196,184,255,0.9)); color: var(--purple-glow); }
+  }
+
+  @keyframes resultPop {
+    0%   { opacity:0; transform: scale(0.4) translateY(20px); }
+    60%  { opacity:1; transform: scale(1.15) translateY(-5px); }
+    80%  { transform: scale(0.95) translateY(2px); }
+    100% { opacity:1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes overlayFadeIn  { from { opacity:0; } to { opacity:1; } }
+  @keyframes overlayFadeOut { from { opacity:1; } to { opacity:0; } }
+
+  .dice-rolling { animation: diceShake 0.9s ease-in-out, diceGlow 0.9s ease-in-out; }
+  .result-pop   { animation: resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="screen-home" class="screen active">
+  <div class="d20-icon">⬡</div>
+  <h1>Initiative</h1>
+  <p class="subtitle">Daily Sync Order</p>
+
+  <div class="card" style="margin-bottom:0.75rem;border-color:var(--purple-dim);">
+    <div style="font-family:'Cinzel',serif;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--purple-bright);margin-bottom:0.75rem;">How It Works</div>
+    <div class="instruction-row">
+      <div class="instruction-num">1</div>
+      <div class="instruction-text">Whoever is running the sync clicks <strong>Roll for Initiative</strong>, marks who's present, and starts the session.</div>
+    </div>
+    <div class="instruction-row">
+      <div class="instruction-num">2</div>
+      <div class="instruction-text">Everyone else will be automatically redirected to enter their roll — no refresh needed.</div>
+    </div>
+    <div class="instruction-row">
+      <div class="instruction-num">3</div>
+      <div class="instruction-text">Ties trigger a <strong>Roll Off</strong> — the app handles it automatically. Keep rolling until order is resolved.</div>
+    </div>
+    <div class="instruction-row">
+      <div class="instruction-num">4</div>
+      <div class="instruction-text">Previous roll order is below the leaderboard. Past quarter standings live under <strong>Past Quarters</strong>.</div>
+    </div>
+  </div>
+
+  <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.75rem;">⚔ Roll for Initiative</button>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>Leaderboard <span id="quarter-label" class="quarter-badge">—</span></h2>
+      <button class="btn-ghost" style="font-size:0.8rem;padding:0.3rem 0.75rem;" onclick="showManage()">Manage Team</button>
+    </div>
+    <div id="leaderboard-list"><div class="empty-state">Loading...</div></div>
+  </div>
+
+  <div id="prev-order-card" class="card" style="display:none;">
+    <div class="section-label">Last Roll Order</div>
+    <div id="prev-order-list"></div>
+  </div>
+
+  <button class="btn-ghost btn-large" onclick="showHistoryScreen()">📜 Past Quarters</button>
+</div>
+
+<!-- PAST QUARTERS -->
+<div id="screen-history" class="screen">
+  <h1>Past Leaderboards</h1>
+  <p class="subtitle">Final standings by quarter</p>
+  <div id="history-content"><div class="empty-state">Loading...</div></div>
+  <div style="height:1rem;"></div>
+  <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">← Back to Home</button>
+</div>
+
+<!-- START ROLL — choose who's present -->
+<div id="screen-start" class="screen">
+  <h1>Who's Here?</h1>
+  <p class="subtitle">Mark attendance before rolling</p>
+  <div class="card">
+    <div id="start-member-list"></div>
+  </div>
+  <div id="start-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
+  <button class="btn-primary btn-large" onclick="beginSession()">Start Session</button>
+  <div style="height:0.75rem;"></div>
+  <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">Cancel</button>
+</div>
+
+<!-- NAME PICKER -->
+<div id="screen-namepicker" class="screen">
+  <h1>Who Are You?</h1>
+  <p class="subtitle" id="namepicker-subtitle">Tap your name to continue</p>
+  <div id="name-button-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.5rem;"></div>
+  <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">← Back</button>
+</div>
+
+<!-- NAME CONFIRM -->
+<div id="screen-nameconfirm" class="screen">
+  <h1 style="margin-bottom:1rem;">Is this you?</h1>
+  <div id="nameconfirm-card" class="card" style="text-align:center;padding:2rem;">
+    <div style="font-family:'Cinzel',serif;font-size:2rem;color:var(--purple-glow);margin-bottom:0.5rem;" id="nameconfirm-name"></div>
+    <div style="color:var(--text-dim);font-size:0.85rem;">Tap confirm to continue</div>
+  </div>
+  <button class="btn-primary btn-large" onclick="confirmName()" style="margin-bottom:0.75rem;">Yes, that's me</button>
+  <button class="btn-ghost btn-large" onclick="showScreen('screen-namepicker')">That's not me →</button>
+</div>
+
+<!-- ENTER YOUR ROLL -->
+<div id="screen-myroll" class="screen">
+  <h1>Enter Your Roll</h1>
+  <p class="subtitle" id="myroll-subtitle">Roll a d20 and enter it below</p>
+
+  <!-- Dice animation overlay -->
+  <div id="dice-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,15,0.92);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+    <div id="dice-anim" style="font-size:8rem;line-height:1;user-select:none;color:var(--purple-bright);filter:drop-shadow(0 0 12px rgba(163,148,240,0.5));">⬡</div>
+    <div id="dice-result-flash" style="font-family:'Cinzel',serif;font-size:5rem;font-weight:700;color:var(--purple-glow);opacity:0;text-shadow:0 0 30px rgba(196,184,255,0.8);min-height:6rem;display:flex;align-items:center;justify-content:center;"></div>
+  </div>
+
+  <div class="card" id="myroll-card">
+    <div id="myroll-fields"></div>
+  </div>
+
+  <div id="myroll-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
+  <button class="btn-ghost btn-large" id="btn-roll-for-me" onclick="rollForMe()" style="margin-bottom:0.75rem;">🎲 Roll for me</button>
+  <button class="btn-primary btn-large" id="btn-submit-roll" onclick="submitMyRoll()">Submit Roll</button>
+</div>
+
+<!-- WAITING ROOM -->
+<div id="screen-waiting" class="screen">
+  <h1 id="waiting-title">Waiting for Rolls</h1>
+  <p class="subtitle" id="waiting-subtitle">Refresh happens automatically</p>
+
+  <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999;display:none;"></canvas>
+
+  <div class="poll-status"><span class="spinner"></span><span id="poll-text">Checking for updates...</span></div>
+
+  <div id="rolloff-banner" class="rolloff-banner" style="display:none;"></div>
+
+  <div class="card">
+    <div class="section-label" id="waiting-section-label">Roll Status</div>
+    <div id="waiting-grid" class="waiting-grid"></div>
+  </div>
+
+  <button class="btn-primary btn-large" id="btn-letsgo" onclick="advanceSession()" disabled>Let's go!</button>
+</div>
+
+<!-- RESULT -->
+<div id="screen-result" class="screen">
+  <h1>Initiative Order</h1>
+  <p class="subtitle">Today's speaking order</p>
+  <div id="result-list" style="margin-bottom:1.5rem;"></div>
+  <button class="btn-primary btn-large" id="btn-done" onclick="setWorking(this,true);showScreen('screen-home');refreshHome();">Done!</button>
+</div>
+
+<!-- MANAGE TEAM -->
+<div id="screen-manage" class="screen">
+  <h1>Team Roster</h1>
+  <p class="subtitle">Add or remove members</p>
+  <div class="card">
+    <div id="manage-list"></div>
+    <div class="add-row">
+      <input type="text" id="new-name-input" placeholder="New member name..." onkeydown="if(event.key==='Enter')addMemberUI()">
+      <label class="toggle" title="Default present" style="margin-left:4px;">
+        <input type="checkbox" id="new-default-present" checked>
+        <span class="toggle-slider"></span>
+      </label>
+      <button class="btn-primary" onclick="addMemberUI()">Add</button>
+    </div>
+    <div id="add-error" class="error-text" style="display:none;">Name already exists or is empty.</div>
+  </div>
+  <button class="btn-ghost btn-large" onclick="showScreen('screen-home');refreshHome();">← Back to Home</button>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────
+let members = [];
+let currentSession = null;
+let myName = null;
+let pollTimer = null;
+let pollCount = 0;
+
+// ── GAS RPC ───────────────────────────────────────────────────
+function rpc(fn, args, cb) {
+  google.script.run
+    .withSuccessHandler(cb)
+    .withFailureHandler(err => { console.error(fn, err); cb(null); })
+    [fn].apply(null, args || []);
+}
+
+// ── Screen management ─────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-home') {
+    startHomePolling();
+  } else {
+    stopHomePolling();
+  }
+}
+
+// ── Home ──────────────────────────────────────────────────────
+function refreshHome() {
+  rpc('poll', [], data => {
+    if (!data) return;
+    members = data.members || [];
+    currentSession = data.session;
+    renderLeaderboard(data.leaderboard);
+    renderLastOrder(data.lastOrder);
+
+    // If there's an active session, redirect to appropriate screen
+    if (currentSession && currentSession.status !== 'complete') {
+      routeToSessionScreen();
+    }
+  });
+}
+
+function renderLeaderboard(lb) {
+  if (!lb) return;
+  document.getElementById('quarter-label').textContent = lb.quarter || '—';
+  const el = document.getElementById('leaderboard-list');
+  const entries = lb.members || [];
+  const withRolls = entries.filter(e => e.count > 0);
+  if (withRolls.length === 0) {
+    el.innerHTML = '<div class="empty-state">No rolls this quarter yet.</div>';
+    return;
+  }
+  const maxScore = Math.max(...entries.filter(e => e.bayesian).map(e => e.bayesian), 1);
+  el.innerHTML = entries.map((e, i) => {
+    const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    const score = e.bayesian;
+    const pct = score ? (score / maxScore * 100).toFixed(0) : 0;
+    const scoreStr = score ? score.toFixed(1) : '—';
+    const countStr = e.count > 0 ? `${e.count} roll${e.count!==1?'s':''}` : 'no rolls';
+    return `<div class="leaderboard-row">
+      <div class="rank-badge ${rankClass}">${i+1}</div>
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+          <span style="font-weight:500;font-size:1rem;">${e.name}</span>
+          <span style="font-size:0.75rem;color:var(--text-dim);">${countStr}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+            <div class="avg-bar" style="width:${pct}%;${i===0?'background:var(--gold);':''}"></div>
+          </div>
+          <span style="font-size:0.9rem;color:${i===0?'var(--gold)':'var(--text-muted)'};min-width:42px;text-align:right;font-weight:500;">${scoreStr}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLastOrder(order) {
+  const card = document.getElementById('prev-order-card');
+  const list = document.getElementById('prev-order-list');
+  if (!order || order.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  list.innerHTML = order.map((name, i) =>
+    `<div class="prev-order-row"><span class="prev-pos">${i+1}.</span><span>${name}</span></div>`
+  ).join('');
+}
+
+// ── Start roll flow ───────────────────────────────────────────
+function showStartRoll() {
+  const btn = document.getElementById('btn-start-roll');
+  setWorking(btn, true);
+  rpc('poll', [], data => {
+    setWorking(btn, false);
+    if (!data) return;
+    members = data.members || [];
+    currentSession = data.session;
+
+    if (currentSession && currentSession.status !== 'complete') {
+      routeToSessionScreen();
+      return;
+    }
+
+    renderStartScreen();
+    showScreen('screen-start');
+  });
+}
+
+function renderStartScreen() {
+  const list = document.getElementById('start-member-list');
+  list.innerHTML = members.map(m =>
+    `<div class="roll-row">
+      <span class="name-label">${m.name}</span>
+      <label class="toggle">
+        <input type="checkbox" ${m.defaultPresent ? 'checked' : ''} id="start-pres-${safeid(m.name)}" onchange="updatePresLabel('${m.name}')">
+        <span class="toggle-slider"></span>
+      </label>
+      <span id="start-pres-label-${safeid(m.name)}" class="${m.defaultPresent?'present-label':'absent-label'}">${m.defaultPresent?'Present':'Absent'}</span>
+    </div>`
+  ).join('');
+}
+
+function updatePresLabel(name) {
+  const sid = safeid(name);
+  const checked = document.getElementById(`start-pres-${sid}`).checked;
+  const label = document.getElementById(`start-pres-label-${sid}`);
+  label.textContent = checked ? 'Present' : 'Absent';
+  label.className = checked ? 'present-label' : 'absent-label';
+}
+
+function beginSession() {
+  const presentNames = members
+    .filter(m => document.getElementById(`start-pres-${safeid(m.name)}`)?.checked)
+    .map(m => m.name);
+
+  if (presentNames.length < 1) {
+    document.getElementById('start-error').textContent = 'At least one person must be present.';
+    document.getElementById('start-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('start-error').style.display = 'none';
+
+  const btn = document.querySelector('#screen-start .btn-primary');
+  setWorking(btn, true);
+
+  rpc('startSession', [presentNames], result => {
+    if (!result || !result.success) {
+      setWorking(btn, false);
+      if (result && result.error === 'A session is already in progress') {
+        rpc('poll', [], data => {
+          currentSession = data.session;
+          routeToSessionScreen();
+        });
+      }
+      return;
+    }
+    currentSession = result.session;
+    showMyRollScreen();
+  });
+}
+
+// ── Name picker ───────────────────────────────────────────────
+let _afterNamePicked = null; // callback after name confirmed
+
+function showNamePicker(subtitle, availableNames, callback) {
+  _afterNamePicked = callback;
+  document.getElementById('namepicker-subtitle').textContent = subtitle || 'Tap your name to continue';
+  const grid = document.getElementById('name-button-grid');
+  // Show all present names; if not in present list they can still pick (observer mode handled in callback)
+  const namesToShow = availableNames || members.map(m => m.name);
+  grid.innerHTML = namesToShow.map(name =>
+    `<button class="name-btn" onclick="pickName('${name}')">${name}</button>`
+  ).join('');
+  showScreen('screen-namepicker');
+}
+
+function pickName(name) {
+  document.getElementById('nameconfirm-name').textContent = name;
+  window._pendingName = name;
+  showScreen('screen-nameconfirm');
+}
+
+function confirmName() {
+  const name = window._pendingName;
+  if (!name) { showScreen('screen-namepicker'); return; }
+  const btn = document.querySelector('#screen-nameconfirm .btn-primary');
+  setWorking(btn, true);
+  myName = name;
+  if (_afterNamePicked) _afterNamePicked(name);
+}
+
+// ── My roll entry ─────────────────────────────────────────────
+function showMyRollScreen() {
+  if (!myName) {
+    const presentNames = currentSession ? currentSession.presentNames : members.map(m => m.name);
+    showNamePicker('Tap your name to continue', presentNames, (name) => {
+      myName = name;
+      showMyRollScreen();
+    });
+    return;
+  }
+
+  const inRolloff = currentSession.status === 'rolloff';
+  const currentRound = inRolloff ? currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1] : null;
+  const rolloffNames = currentRound ? currentRound.groups.flat() : [];
+  const inThisRolloff = inRolloff && rolloffNames.includes(myName);
+  const alreadyRolled = inRolloff
+    ? (currentRound.rolls[myName] !== undefined)
+    : (currentSession.rolls[myName] !== undefined);
+
+  if (alreadyRolled) {
+    showWaitingScreen();
+    return;
+  }
+
+  if (inRolloff && !inThisRolloff) {
+    showWaitingScreen();
+    return;
+  }
+
+  document.getElementById('myroll-subtitle').textContent = inRolloff
+    ? `Roll Off! You tied — roll again`
+    : 'Roll a d20 and enter it below';
+
+  const fields = document.getElementById('myroll-fields');
+  fields.innerHTML = `<div class="roll-row" style="border:none;padding:0.5rem 0;">
+    <span class="name-label">${myName}</span>
+    <input type="number" min="1" max="20" id="my-roll-input" placeholder="—" style="font-size:1.5rem;width:80px;"
+      oninput="clampInput(this)" onblur="clampInput(this)" autofocus>
+  </div>`;
+
+  showScreen('screen-myroll');
+}
+
+function submitMyRoll() {
+  const input = document.getElementById('my-roll-input');
+  const v = parseInt(input.value);
+  if (isNaN(v) || v < 1 || v > 20) {
+    document.getElementById('myroll-error').textContent = 'Enter a number between 1 and 20.';
+    document.getElementById('myroll-error').style.display = 'block';
+    input.style.borderColor = 'var(--red)';
+    return;
+  }
+  document.getElementById('myroll-error').style.display = 'none';
+
+  const submitBtn = document.getElementById('btn-submit-roll');
+  setWorking(submitBtn, true);
+
+  const inRolloff = currentSession.status === 'rolloff';
+  const fn = inRolloff ? 'submitRolloffRoll' : 'submitRoll';
+
+  rpc(fn, [myName, v], result => {
+    if (!result || !result.success) {
+      setWorking(submitBtn, false);
+      document.getElementById('myroll-error').textContent = result?.error || 'Error submitting roll.';
+      document.getElementById('myroll-error').style.display = 'block';
+      return;
+    }
+    currentSession = result.session;
+    showWaitingScreen();
+  });
+}
+
+// ── Waiting screen ────────────────────────────────────────────
+function showWaitingScreen() {
+  renderWaitingScreen();
+  showScreen('screen-waiting');
+  startPolling();
+}
+
+// ── Home screen polling (auto-redirect when session starts) ──
+let homepollTimer = null;
+
+function startHomePolling() {
+  stopHomePolling();
+  homepolling = true;
+  homepolling = setInterval(() => {
+    rpc('poll', [], data => {
+      if (!data) return;
+      members = data.members || [];
+      currentSession = data.session;
+      renderLeaderboard(data.leaderboard);
+      renderLastOrder(data.lastOrder);
+      if (currentSession && currentSession.status !== 'complete') {
+        stopHomePolling();
+        routeToSessionScreen();
+      }
+    });
+  }, 5000);
+}
+
+function stopHomePolling() {
+  if (homepolling && homepolling !== true) { clearInterval(homepolling); }
+  homepolling = null;
+}
+
+let homepolling = null;
+
+function renderWaitingScreen() {
+  if (!currentSession) return;
+
+  const inRolloff = currentSession.status === 'rolloff';
+  const currentRound = inRolloff ? currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1] : null;
+  const rolloffNames = currentRound ? currentRound.groups.flat() : [];
+
+  document.getElementById('waiting-title').textContent = inRolloff ? 'Roll Off!' : 'Waiting for Rolls';
+  document.getElementById('waiting-subtitle').textContent = inRolloff
+    ? 'Tied members need to roll again'
+    : 'Everyone needs to submit before continuing';
+  document.getElementById('waiting-section-label').textContent = inRolloff ? 'Rolloff Status' : 'Roll Status';
+
+  const banner = document.getElementById('rolloff-banner');
+  if (inRolloff) {
+    const tiedGroups = currentRound.groups;
+    const tiedDescriptions = tiedGroups.map(g => `${g.join(' & ')} (tied at ${getInitialRollForGroup(g)})`).join(' · ');
+    banner.textContent = `🎲 Roll Off: ${tiedDescriptions}`;
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  const relevantNames = inRolloff ? rolloffNames : currentSession.presentNames;
+  const rollMap = inRolloff ? currentRound.rolls : currentSession.rolls;
+
+  const grid = document.getElementById('waiting-grid');
+  grid.innerHTML = relevantNames.map(name => {
+    const hasRolled = rollMap[name] !== undefined;
+    const isMe = name === myName;
+    const roll = rollMap[name];
+    const is20 = roll === 20;
+    return `<div class="waiting-chip" style="${is20 ? 'border-color:var(--gold);' : ''}">
+      <div class="dot ${hasRolled ? 'dot-done' : 'dot-waiting'}"></div>
+      <span style="${isMe ? 'color:var(--purple-glow);font-weight:500;' : ''}">${name}${isMe ? ' (you)' : ''}</span>
+      ${hasRolled
+        ? `<span style="margin-left:auto;font-family:'Cinzel',serif;font-size:0.9rem;color:${is20 ? 'var(--gold)' : 'var(--purple-bright)'};">${is20 ? '⚡20' : roll}</span>`
+        : `<button class="btn-danger" style="margin-left:auto;font-size:0.75rem;padding:0.15rem 0.4rem;" onclick="removeFromSession('${name}')">✕</button>`
+      }
+    </div>`;
+  }).join('');
+
+  const allIn = relevantNames.every(n => rollMap[n] !== undefined);
+  const btn = document.getElementById('btn-letsgo');
+  btn.disabled = !allIn;
+  btn.title = allIn ? '' : 'Waiting for everyone to submit';
+
+  // Confetti for any newly revealed 20s
+  const current20s = relevantNames.filter(n => rollMap[n] === 20);
+  current20s.forEach(name => {
+    if (!window._confettiFired) window._confettiFired = new Set();
+    const key = `${currentSession.sessionId}-${name}`;
+    if (!window._confettiFired.has(key)) {
+      window._confettiFired.add(key);
+      fireConfetti();
+    }
+  });
+
+  // My roll display
+  const myRoll = (inRolloff ? currentRound.rolls : currentSession.rolls)[myName];
+  if (myRoll !== undefined) {
+    const existing = document.getElementById('my-roll-display');
+    if (!existing) {
+      const disp = document.createElement('div');
+      disp.id = 'my-roll-display';
+      disp.className = 'my-roll-display';
+      disp.innerHTML = `<span style="color:var(--text-muted);font-size:0.9rem;">Your roll:</span><span class="my-roll-val" style="${myRoll===20?'color:var(--gold);':''}">${myRoll===20?'⚡ 20':myRoll}</span>`;
+      document.getElementById('screen-waiting').insertBefore(disp, document.querySelector('.poll-status'));
+    }
+  }
+}
+
+// ── Confetti ──────────────────────────────────────────────────
+function fireConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+
+  const pieces = Array.from({length: 120}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * -canvas.height * 0.5,
+    r: Math.random() * 7 + 3,
+    d: Math.random() * 3 + 1,
+    color: ['#c4b8ff','#a394f0','#d4aa44','#7b6fd4','#50d090','#e09050'][Math.floor(Math.random()*6)],
+    tilt: Math.random() * 10 - 5,
+    tiltSpeed: Math.random() * 0.1 + 0.05,
+    angle: 0
+  }));
+
+  let frame = 0;
+  const maxFrames = 180;
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      p.y += p.d;
+      p.x += Math.sin(p.angle) * 1.5;
+      p.angle += 0.05;
+      p.tilt += p.tiltSpeed;
+      ctx.beginPath();
+      ctx.lineWidth = p.r;
+      ctx.strokeStyle = p.color;
+      ctx.moveTo(p.x + p.tilt, p.y);
+      ctx.lineTo(p.x + p.tilt + p.r * Math.cos(p.tilt), p.y + p.r * Math.sin(p.tilt));
+      ctx.stroke();
+    });
+    frame++;
+    if (frame < maxFrames) {
+      requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'none';
+    }
+  }
+  draw();
+}
+
+// ── Remove person from active session ────────────────────────
+function removeFromSession(name) {
+  if (!confirm(`Remove ${name} from this session? Their roll won't be counted.`)) return;
+  rpc('removeFromSession', [name], result => {
+    if (!result || !result.success) { alert(result?.error || 'Error removing.'); return; }
+    currentSession = result.session;
+    renderWaitingScreen();
+  });
+}
+
+function getInitialRollForGroup(group) {
+  if (!currentSession) return '?';
+  const rolls = currentSession.rolls;
+  return group.map(n => rolls[n] || '?')[0];
+}
+
+function advanceSession() {
+  const btn = document.getElementById('btn-letsgo');
+  setWorking(btn, true);
+  stopPolling();
+  const inRolloff = currentSession && currentSession.status === 'rolloff';
+  const fn = inRolloff ? 'advanceFromRolloff' : 'advanceFromRolling';
+
+  rpc(fn, [], result => {
+    if (!result || !result.success) {
+      setWorking(btn, false);
+      alert(result?.error || 'Error advancing session.');
+      startPolling();
+      return;
+    }
+    currentSession = result.session;
+    if (currentSession.status === 'rolloff') {
+      // New rolloff round — need to re-enter roll if in it
+      const currentRound = currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1];
+      const rolloffNames = currentRound.groups.flat();
+      if (myName && rolloffNames.includes(myName)) {
+        showMyRollScreen();
+      } else {
+        showWaitingScreen();
+      }
+    } else if (currentSession.status === 'complete') {
+      showResultScreen();
+    }
+  });
+}
+
+// ── Result screen ─────────────────────────────────────────────
+function showResultScreen() {
+  if (!currentSession || !currentSession.finalOrder) return;
+  const order = currentSession.finalOrder;
+  const rollsMap = currentSession.rolls || {};
+  const allRolloffRounds = currentSession.rolloffRounds || [];
+
+  function getLastRolloffRoll(name) {
+    for (let i = allRolloffRounds.length - 1; i >= 0; i--) {
+      if (allRolloffRounds[i].rolls[name] !== undefined) return allRolloffRounds[i].rolls[name];
+    }
+    return null;
+  }
+
+  const list = document.getElementById('result-list');
+  list.innerHTML = order.map((name, i) => {
+    const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    const initial = rollsMap[name];
+    const rolloff = getLastRolloffRoll(name);
+    const rollInfo = initial !== undefined
+      ? (rolloff !== null ? `${initial} → rolloff: ${rolloff}` : `rolled ${initial}`)
+      : '';
+    const isMe = name === myName;
+    return `<div class="result-row" style="animation-delay:${i*0.06}s;${isMe?'border-color:var(--purple-mid);':''}">
+      <div class="rank-badge ${rankClass}">${i+1}</div>
+      <span class="result-name" style="${isMe?'color:var(--purple-glow);':''}">${name}${isMe?' ✦':''}</span>
+      <span class="dice-roll">${rollInfo}</span>
+    </div>`;
+  }).join('');
+
+  const absentNames = members.filter(m => !currentSession.presentNames.includes(m.name)).map(m => m.name);
+  if (absentNames.length > 0) {
+    list.innerHTML += `<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--text-dim);font-size:0.85rem;">Absent: ${absentNames.join(', ')}</div>`;
+  }
+
+  showScreen('screen-result');
+}
+
+// ── Polling ───────────────────────────────────────────────────
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(doPoll, 3000);
+  doPoll();
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function doPoll() {
+  pollCount++;
+  document.getElementById('poll-text').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+  rpc('poll', [], data => {
+    if (!data) return;
+    members = data.members || [];
+    const prevStatus = currentSession ? currentSession.status : null;
+    const prevRolloffLen = currentSession && currentSession.rolloffRounds ? currentSession.rolloffRounds.length : 0;
+    currentSession = data.session;
+
+    if (!currentSession || currentSession.status === 'complete') {
+      stopPolling();
+      if (currentSession && currentSession.status === 'complete' && prevStatus !== 'complete') {
+        showResultScreen();
+      }
+      return;
+    }
+
+    const newRolloffLen = currentSession.rolloffRounds ? currentSession.rolloffRounds.length : 0;
+    const newRolloffRound = newRolloffLen > prevRolloffLen;
+
+    if (newRolloffRound) {
+      const currentRound = currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1];
+      const rolloffNames = currentRound.groups.flat();
+      if (myName && rolloffNames.includes(myName)) {
+        stopPolling();
+        showMyRollScreen();
+        return;
+      }
+    }
+
+    renderWaitingScreen();
+  });
+}
+
+// ── Route to correct screen for active session ────────────────
+function routeToSessionScreen() {
+  if (!currentSession) { showScreen('screen-home'); return; }
+  if (currentSession.status === 'complete') { showResultScreen(); return; }
+
+  if (!myName) {
+    const presentNames = currentSession.presentNames || [];
+    showNamePicker('A session is in progress — who are you?', presentNames, (name) => {
+      myName = name;
+      routeToSessionScreen();
+    });
+    return;
+  }
+
+  const inRolloff = currentSession.status === 'rolloff';
+  const currentRound = inRolloff ? currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1] : null;
+  const rolloffNames = currentRound ? currentRound.groups.flat() : [];
+  const alreadyRolled = inRolloff
+    ? (currentRound.rolls[myName] !== undefined)
+    : (currentSession.rolls[myName] !== undefined);
+  const inThisRolloff = inRolloff && rolloffNames.includes(myName);
+
+  if (!alreadyRolled && (!inRolloff || inThisRolloff)) {
+    showMyRollScreen();
+  } else {
+    showWaitingScreen();
+  }
+}
+
+// ── Manage team ───────────────────────────────────────────────
+function showManage() {
+  renderManageScreen();
+  showScreen('screen-manage');
+}
+
+function renderManageScreen() {
+  const list = document.getElementById('manage-list');
+  if (members.length === 0) { list.innerHTML = '<div class="empty-state">No members.</div>'; return; }
+  list.innerHTML = members.map(m =>
+    `<div class="manage-row">
+      <span style="font-size:1rem;font-weight:500;">${m.name}</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:0.78rem;color:${m.defaultPresent?'var(--green)':'var(--text-dim)'};" id="defpres-label-${safeid(m.name)}">${m.defaultPresent?'Default: Present':'Default: Absent'}</span>
+        <label class="toggle" title="Toggle default presence">
+          <input type="checkbox" ${m.defaultPresent?'checked':''} onchange="toggleDefaultPresence('${m.name}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+        <button class="btn-danger" onclick="removeMemberUI('${m.name}')">Remove</button>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function addMemberUI() {
+  const input = document.getElementById('new-name-input');
+  const defaultPresent = document.getElementById('new-default-present').checked;
+  const errEl = document.getElementById('add-error');
+  const name = input.value.trim();
+  if (!name) { errEl.style.display='block'; return; }
+  rpc('addMember', [name, defaultPresent], result => {
+    if (!result || !result.success) { errEl.style.display='block'; return; }
+    errEl.style.display='none';
+    input.value='';
+    rpc('poll', [], data => { if(data) { members = data.members||[]; renderManageScreen(); } });
+  });
+}
+
+function toggleDefaultPresence(name, defaultPresent) {
+  const label = document.getElementById(`defpres-label-${safeid(name)}`);
+  if (label) {
+    label.textContent = defaultPresent ? 'Default: Present' : 'Default: Absent';
+    label.style.color = defaultPresent ? 'var(--green)' : 'var(--text-dim)';
+  }
+  rpc('setMemberDefaultPresence', [name, defaultPresent], result => {
+    if (!result || !result.success) {
+      console.error('Failed to update default presence for', name);
+    }
+    rpc('poll', [], data => { if(data) { members = data.members||[]; } });
+  });
+}
+function removeMemberUI(name) {
+  if (!confirm(`Remove ${name} from the roster?`)) return;
+  rpc('removeMember', [name], result => {
+    if (!result || !result.success) { alert('Error removing member.'); return; }
+    rpc('poll', [], data => { if(data) { members = data.members||[]; renderManageScreen(); } });
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function safeid(name) { return name.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''); }
+function clampInput(el) { let v=parseInt(el.value); if(isNaN(v))return; if(v<1)el.value=1; if(v>20)el.value=20; }
+
+function setWorking(btnEl, isWorking, originalText) {
+  if (isWorking) {
+    btnEl.disabled = true;
+    btnEl.dataset.originalText = btnEl.textContent;
+    btnEl.textContent = 'Working...';
+  } else {
+    btnEl.disabled = false;
+    btnEl.textContent = originalText || btnEl.dataset.originalText || btnEl.textContent;
+  }
+}
+
+// Cryptographically secure D20 roll using Web Crypto API
+function secureD20() {
+  const arr = new Uint32Array(1);
+  // Rejection sampling to avoid modulo bias: only accept values < 20 * floor(2^32 / 20)
+  const limit = Math.floor(4294967296 / 20) * 20;
+  let val;
+  do {
+    crypto.getRandomValues(arr);
+    val = arr[0];
+  } while (val >= limit);
+  return (val % 20) + 1;
+}
+
+function rollForMe() {
+  const result = secureD20();
+  const overlay = document.getElementById('dice-overlay');
+  const diceEl  = document.getElementById('dice-anim');
+  const flashEl = document.getElementById('dice-result-flash');
+
+  // Immediately disable both buttons
+  document.getElementById('btn-roll-for-me').disabled = true;
+  document.getElementById('btn-submit-roll').disabled = true;
+
+  // Reset
+  diceEl.style.animation = 'none';
+  diceEl.style.color = 'var(--purple-bright)';
+  diceEl.style.filter = 'drop-shadow(0 0 12px rgba(163,148,240,0.5))';
+  flashEl.style.opacity = '0';
+  flashEl.style.animation = 'none';
+  flashEl.textContent = '';
+
+  // Show overlay
+  overlay.style.display = 'flex';
+
+  // Force reflow so animation restarts cleanly
+  void diceEl.offsetWidth;
+  void flashEl.offsetWidth;
+
+  // Start shake + glow animation on die
+  diceEl.style.animation = 'diceShake 0.9s ease-in-out, diceGlow 0.9s ease-in-out';
+
+  // After shake: reveal number
+  setTimeout(() => {
+    diceEl.style.animation = 'none';
+
+    const is20 = result === 20;
+    const is1  = result === 1;
+
+    if (is20) {
+      diceEl.style.color = 'var(--gold)';
+      diceEl.style.filter = 'drop-shadow(0 0 24px rgba(212,170,68,0.9))';
+    } else if (is1) {
+      diceEl.style.color = 'var(--red)';
+      diceEl.style.filter = 'drop-shadow(0 0 24px rgba(224,80,96,0.8))';
+    } else {
+      diceEl.style.color = 'var(--purple-glow)';
+      diceEl.style.filter = 'drop-shadow(0 0 16px rgba(196,184,255,0.7))';
+    }
+
+    flashEl.textContent = result;
+    flashEl.style.color = is20 ? 'var(--gold)' : is1 ? 'var(--red)' : 'var(--purple-glow)';
+    flashEl.style.textShadow = is20
+      ? '0 0 40px rgba(212,170,68,0.9)'
+      : is1
+        ? '0 0 40px rgba(224,80,96,0.8)'
+        : '0 0 30px rgba(196,184,255,0.8)';
+
+    void flashEl.offsetWidth;
+    flashEl.style.animation = 'resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards';
+    flashEl.style.opacity = '1';
+  }, 950);
+
+  // Dismiss and fill input
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+      overlay.style.transition = '';
+      const input = document.getElementById('my-roll-input');
+      if (input) {
+        input.value = result;
+        input.style.borderColor = 'var(--purple-mid)';
+        input.style.transition = 'background 0.3s';
+        input.style.background = 'rgba(123,111,212,0.3)';
+        setTimeout(() => { input.style.background = ''; }, 400);
+      }
+      // Auto-submit — no take-backs
+      submitMyRoll();
+    }, 300);
+  }, 2200);
+}
+
+function showHistoryScreen() {
+  showScreen('screen-history');
+  document.getElementById('history-content').innerHTML = '<div class="empty-state">Loading...</div>';
+  rpc('getPastLeaderboards', [], quarters => {
+    const el = document.getElementById('history-content');
+    if (!quarters || quarters.length === 0) {
+      el.innerHTML = `<div style="text-align:center;padding:3rem 1rem;">
+        <div style="font-size:2.5rem;color:var(--text-dim);margin-bottom:1rem;">⏳</div>
+        <div style="font-family:'Cinzel',serif;font-size:1.2rem;color:var(--purple-bright);margin-bottom:0.5rem;">Waiting for the current quarter to finish</div>
+        <div style="color:var(--text-muted);font-size:0.9rem;line-height:1.7;">Past leaderboards are saved automatically at the end of each quarter — March, June, September, and December.</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = quarters.map((q, qi) => {
+      const maxScore = Math.max(...q.members.filter(m => m.bayesian).map(m => m.bayesian), 1);
+      const archivedDate = q.archivedAt ? new Date(q.archivedAt).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' }) : '';
+      const rows = q.members.map((m, i) => {
+        const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+        const score = m.bayesian;
+        const pct = score ? (score / maxScore * 100).toFixed(0) : 0;
+        const scoreStr = score ? score.toFixed(1) : '—';
+        return `<div class="leaderboard-row">
+          <div class="rank-badge ${rankClass}">${i+1}</div>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+              <span style="font-weight:500;font-size:1rem;">${m.name}</span>
+              <span style="font-size:0.75rem;color:var(--text-dim);">${m.count} roll${m.count!==1?'s':''}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+                <div style="height:100%;border-radius:2px;background:${i===0?'var(--gold)':'var(--purple-dim)'};width:${pct}%;"></div>
+              </div>
+              <span style="font-size:0.88rem;color:${i===0?'var(--gold)':'var(--text-muted)'};min-width:38px;text-align:right;font-weight:500;">${scoreStr}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="card" style="animation:fadeIn 0.3s ease ${qi*0.08}s both;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+          <span style="font-family:'Cinzel',serif;font-size:1.1rem;color:var(--purple-glow);font-weight:600;">${q.quarterLabel}</span>
+          <span style="font-size:0.75rem;color:var(--text-dim);">Archived ${archivedDate}</span>
+        </div>
+        ${rows}
+      </div>`;
+    }).join('');
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────
+refreshHome();
+startHomePolling();
+</script>
+</body>
+</html>

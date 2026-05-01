@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Past Leaderboards</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a40;
+    --border-bright: #4a4a80;
+    --purple-dim: #4a3f8a;
+    --purple-mid: #7b6fd4;
+    --purple-bright: #a394f0;
+    --purple-glow: #c4b8ff;
+    --text: #e8e4ff;
+    --text-muted: #8880bb;
+    --text-dim: #5550a0;
+    --gold: #d4aa44;
+    --gold-dim: #8a6e22;
+    --red: #e05060;
+    --green: #50d090;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; min-height:100vh; font-size:16px; line-height:1.5; }
+
+  .page { padding:2rem 1.5rem; max-width:700px; margin:0 auto; }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);} }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  h1 { font-family:'Cinzel',serif; font-size:2rem; font-weight:700; color:var(--purple-glow); text-align:center; letter-spacing:0.08em; margin-bottom:0.25rem; }
+  .subtitle { text-align:center; color:var(--text-muted); font-size:0.85rem; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:2rem; }
+
+  button { font-family:'Rajdhani',sans-serif; font-size:1rem; font-weight:600; cursor:pointer; border:1px solid var(--border-bright); border-radius:8px; padding:0.6rem 1.4rem; transition:all 0.2s; letter-spacing:0.05em; }
+  .btn-ghost { background:transparent; color:var(--text-muted); border-color:var(--border); width:100%; padding:1rem; font-size:1.1rem; font-family:'Cinzel',serif; }
+  .btn-ghost:hover { background:var(--surface2); color:var(--text); border-color:var(--border-bright); }
+
+  .quarter-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:1.5rem; overflow:hidden; animation:fadeIn 0.3s ease both; }
+  .quarter-header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .quarter-title { font-family:'Cinzel',serif; font-size:1.2rem; color:var(--purple-glow); font-weight:600; letter-spacing:0.05em; }
+  .quarter-meta { font-size:0.78rem; color:var(--text-dim); }
+  .quarter-body { padding:0.5rem 1.25rem 1rem; }
+
+  .lb-row { display:flex; align-items:center; gap:12px; padding:0.6rem 0; border-bottom:1px solid var(--border); }
+  .lb-row:last-child { border-bottom:none; }
+
+  .rank-badge { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:0.8rem; font-weight:600; flex-shrink:0; border:1px solid var(--border); color:var(--text-muted); background:var(--surface2); }
+  .rank-badge.gold   { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
+  .rank-badge.silver { background:#2a2a3a; border-color:#8888aa; color:#8888aa; }
+  .rank-badge.bronze { background:#2a1e12; border-color:#aa7744; color:#aa7744; }
+
+  .avg-bar { height:4px; border-radius:2px; background:var(--purple-dim); }
+
+  .empty-state { text-align:center; padding:3rem 1rem; }
+  .empty-icon { font-size:3rem; color:var(--text-dim); margin-bottom:1rem; }
+  .empty-title { font-family:'Cinzel',serif; font-size:1.3rem; color:var(--purple-bright); margin-bottom:0.5rem; }
+  .empty-body { color:var(--text-muted); font-size:0.95rem; line-height:1.7; }
+
+  .spinner { width:24px; height:24px; border:2px solid var(--border); border-top-color:var(--purple-mid); border-radius:50%; animation:spin 0.8s linear infinite; margin:2rem auto; display:block; }
+
+  .divider { border:none; border-top:1px solid var(--border); margin:1.5rem 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Past Leaderboards</h1>
+  <p class="subtitle">Final standings by quarter</p>
+
+  <div id="content"><div class="spinner"></div></div>
+
+  <hr class="divider">
+  <button class="btn-ghost" onclick="goHome()">← Back to Initiative</button>
+</div>
+
+<script>
+function goHome() {
+  // Strip ?view=history from URL and go back to main app
+  const base = window.location.href.split('?')[0];
+  window.location.href = base;
+}
+
+function renderQuarters(quarters) {
+  const el = document.getElementById('content');
+
+  if (!quarters || quarters.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">⏳</div>
+      <div class="empty-title">Waiting for the current quarter to finish</div>
+      <div class="empty-body">Past leaderboards are automatically saved at the end of each quarter — March, June, September, and December.<br><br>Check back once the quarter wraps up!</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = quarters.map((q, qi) => {
+    const maxScore = Math.max(...q.members.filter(m => m.bayesian).map(m => m.bayesian), 1);
+    const archivedDate = q.archivedAt ? new Date(q.archivedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+
+    const rows = q.members.map((m, i) => {
+      const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+      const score = m.bayesian;
+      const pct = score ? (score / maxScore * 100).toFixed(0) : 0;
+      const scoreStr = score ? score.toFixed(1) : '—';
+      const countStr = `${m.count} roll${m.count !== 1 ? 's' : ''}`;
+      return `<div class="lb-row">
+        <div class="rank-badge ${rankClass}">${i+1}</div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            <span style="font-weight:500;font-size:1rem;">${m.name}</span>
+            <span style="font-size:0.75rem;color:var(--text-dim);">${countStr}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+              <div class="avg-bar" style="width:${pct}%;${i===0?'background:var(--gold);':''}"></div>
+            </div>
+            <span style="font-size:0.88rem;color:${i===0?'var(--gold)':'var(--text-muted)'};min-width:38px;text-align:right;font-weight:500;">${scoreStr}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="quarter-card" style="animation-delay:${qi * 0.08}s;">
+      <div class="quarter-header">
+        <span class="quarter-title">${q.quarterLabel}</span>
+        <span class="quarter-meta">Archived ${archivedDate}</span>
+      </div>
+      <div class="quarter-body">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+google.script.run
+  .withSuccessHandler(data => renderQuarters(data))
+  .withFailureHandler(() => {
+    document.getElementById('content').innerHTML = '<div style="text-align:center;color:var(--red);padding:2rem;">Failed to load. Try refreshing.</div>';
+  })
+  .getPastLeaderboards();
+</script>
+</body>
+</html>
