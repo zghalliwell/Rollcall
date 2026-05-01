@@ -167,6 +167,16 @@
 </head>
 <body>
 
+<!-- Fixed sound toggle — visible on every screen -->
+<div style="position:fixed;top:12px;right:14px;z-index:500;display:flex;align-items:center;gap:8px;background:rgba(10,10,15,0.75);border:1px solid var(--border);border-radius:20px;padding:5px 10px;backdrop-filter:blur(6px);">
+  <span style="font-size:0.72rem;color:var(--text-dim);letter-spacing:0.06em;text-transform:uppercase;user-select:none;">🔊</span>
+  <label class="toggle" title="Toggle sound effects" style="width:34px;height:18px;">
+    <input type="checkbox" id="sound-toggle" checked onchange="setSoundEnabled(this.checked)">
+    <span class="toggle-slider" style="border-radius:18px;"></span>
+  </label>
+  <span id="sound-label" style="font-size:0.72rem;color:var(--green);min-width:18px;user-select:none;">On</span>
+</div>
+
 <!-- HOME -->
 <div id="screen-home" class="screen active">
   <div class="d20-icon">⬡</div>
@@ -597,6 +607,7 @@ function submitMyRoll() {
       document.getElementById('myroll-error').style.display = 'block';
       return;
     }
+    playSound('confirm');
     currentSession = result.session;
     showWaitingScreen();
   });
@@ -681,6 +692,17 @@ function renderWaitingScreen() {
 
   const allIn = relevantNames.every(n => rollMap[n] !== undefined);
   const btn = document.getElementById('btn-letsgo');
+
+  // Play a tick for each newly submitted roll
+  const newlySubmitted = relevantNames.filter(n => {
+    return rollMap[n] !== undefined && !window._submittedDots?.has(n + (currentSession.sessionId || ''));
+  });
+  if (!window._submittedDots) window._submittedDots = new Set();
+  newlySubmitted.forEach(n => {
+    window._submittedDots.add(n + (currentSession.sessionId || ''));
+    playSound('tick');
+  });
+
   btn.disabled = !allIn;
   btn.title = allIn ? '' : 'Waiting for everyone to submit';
 
@@ -796,6 +818,7 @@ function advanceSession() {
       } else {
         showWaitingScreen();
       }
+      playSound('advance');
     } else if (currentSession.status === 'complete') {
       showResultScreen();
     }
@@ -805,6 +828,7 @@ function advanceSession() {
 // ── Result screen ─────────────────────────────────────────────
 function showResultScreen() {
   if (!currentSession || !currentSession.finalOrder) return;
+  playSound('advance');
   const order = currentSession.finalOrder;
   const rollsMap = currentSession.rolls || {};
   const allRolloffRounds = currentSession.rolloffRounds || [];
@@ -1022,6 +1046,7 @@ function rollForMe() {
 
   // Show overlay
   overlay.style.display = 'flex';
+  playSound('diceRoll');
 
   // Force reflow so animation restarts cleanly
   void diceEl.offsetWidth;
@@ -1059,9 +1084,11 @@ function rollForMe() {
     void flashEl.offsetWidth;
     flashEl.style.animation = 'resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards';
     flashEl.style.opacity = '1';
-  }, 950);
 
-  // Dismiss and fill input, then submit directly with the captured result value
+    if (is20) playSound('nat20');
+    else if (is1) playSound('nat1');
+    else playSound('result');
+  }, 950);
   setTimeout(() => {
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.3s ease';
@@ -1147,6 +1174,152 @@ function showHistoryScreen() {
       </div>`;
     }).join('');
   });
+}
+
+// ── Sound Engine ──────────────────────────────────────────────
+// All sounds generated via Web Audio API -- no files, no network requests.
+// Fire-and-forget: errors are swallowed silently, never affect session logic.
+
+let _soundEnabled = true;
+let _audioCtx = null;
+
+function setSoundEnabled(enabled) {
+  _soundEnabled = enabled;
+  document.getElementById('sound-label').textContent = enabled ? 'On' : 'Off';
+  document.getElementById('sound-label').style.color = enabled ? 'var(--green)' : 'var(--text-dim)';
+  if (enabled && !_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+}
+
+function getAudioCtx() {
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function playSound(name) {
+  if (!_soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const sounds = {
+      // Soft confirmation blip
+      confirm: (ctx) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.setValueAtTime(660, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+        g.gain.setValueAtTime(0.18, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        o.start(); o.stop(ctx.currentTime + 0.18);
+      },
+      // Dice rattling -- rapid random bursts of noise
+      diceRoll: (ctx) => {
+        for (let i = 0; i < 12; i++) {
+          setTimeout(() => {
+            try {
+              const buf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
+              const data = buf.getChannelData(0);
+              for (let j = 0; j < data.length; j++) data[j] = (Math.random() * 2 - 1) * 0.3;
+              const src = ctx.createBufferSource();
+              const g = ctx.createGain();
+              const f = ctx.createBiquadFilter();
+              src.buffer = buf;
+              f.type = 'bandpass'; f.frequency.value = 800 + Math.random() * 1200;
+              src.connect(f); f.connect(g); g.connect(ctx.destination);
+              g.gain.setValueAtTime(0.25, ctx.currentTime);
+              g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+              src.start();
+            } catch(e) {}
+          }, i * 75 + Math.random() * 30);
+        }
+      },
+      // Dot turns green on waiting screen -- soft tick
+      tick: (ctx) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.setValueAtTime(1100, ctx.currentTime);
+        g.gain.setValueAtTime(0.1, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+        o.start(); o.stop(ctx.currentTime + 0.07);
+      },
+      // Session advance / Let's go
+      advance: (ctx) => {
+        const notes = [523, 659, 784];
+        notes.forEach((freq, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle'; o.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.1;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+          o.start(t); o.stop(t + 0.22);
+        });
+      },
+      // Nat 20 -- ascending fanfare
+      nat20: (ctx) => {
+        const notes = [523, 659, 784, 1047];
+        notes.forEach((freq, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine'; o.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.12;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.22, t + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+          o.start(t); o.stop(t + 0.35);
+        });
+        // Extra shimmer on top
+        setTimeout(() => {
+          try {
+            const o2 = ctx.createOscillator();
+            const g2 = ctx.createGain();
+            o2.connect(g2); g2.connect(ctx.destination);
+            o2.type = 'sine'; o2.frequency.value = 2093;
+            g2.gain.setValueAtTime(0.12, ctx.currentTime);
+            g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            o2.start(); o2.stop(ctx.currentTime + 0.5);
+          } catch(e) {}
+        }, 480);
+      },
+      // Nat 1 -- descending sad tones
+      nat1: (ctx) => {
+        const notes = [392, 349, 294, 261];
+        notes.forEach((freq, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sawtooth'; o.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.15;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.14, t + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          o.start(t); o.stop(t + 0.3);
+        });
+      },
+      // Result reveal
+      result: (ctx) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine';
+        o.frequency.setValueAtTime(440, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+        g.gain.setValueAtTime(0.15, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+      }
+    };
+    if (sounds[name]) sounds[name](ctx);
+  } catch(e) {}
 }
 
 // ── Init ──────────────────────────────────────────────────────
