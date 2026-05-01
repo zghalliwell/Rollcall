@@ -511,11 +511,15 @@ function cancelSession() {
 }
 
 // ── Quarter-end archive ───────────────────────────────────────
-// Called automatically by time-driven trigger on last day of Mar/Jun/Sep/Dec.
-// Also callable manually from the script editor if needed.
+// Called by triggers on the 30th and 31st of every month at 11pm.
+// March, June, September, and December all have at least 30 days,
+// so both triggers will always fire for every quarter-end month.
+// Non-quarter months are filtered out by the check below.
+// The 31st trigger silently does nothing in months with only 30 days.
 function archiveQuarterLeaderboard() {
   const now = new Date();
   const month = now.getMonth(); // 0-indexed
+
   // Only run at end of Q1 (March=2), Q2 (June=5), Q3 (Sep=8), Q4 (Dec=11)
   const quarterEndMonths = [2, 5, 8, 11];
   if (!quarterEndMonths.includes(month)) {
@@ -527,7 +531,8 @@ function archiveQuarterLeaderboard() {
   const quarterKey = `Q${qinfo.q}_${qinfo.y}`;
   const quarterLabel = `Q${qinfo.q} ${qinfo.y} Final Leaderboard`;
 
-  // Check if already archived this quarter
+  // Check if already archived this quarter (handles the case where both
+  // the 30th and 31st trigger fire in a 31-day month)
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
   if (sheet.getLastRow() > 1) {
     const existing = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat();
@@ -556,9 +561,7 @@ function archiveQuarterLeaderboard() {
     ]);
   });
 
-  // Send email notification
   sendArchiveEmail_(quarterLabel, quarterKey);
-
   Logger.log(`Archived ${quarterLabel} with ${ranked.length} entries.`);
 }
 
@@ -637,9 +640,10 @@ function parseQuarterKey_(key) {
 
 // ── Trigger setup ─────────────────────────────────────────────
 // Run this ONCE from the Apps Script editor after deploying.
-// It creates a monthly trigger that fires on the 28th of every month
-// (safe for all months). The function itself checks if it's actually
-// a quarter-end month before doing anything.
+// Creates two triggers (30th and 31st of every month) at 11pm.
+// All four quarter-end months have at least 30 days so both triggers
+// always cover them. The already-archived check prevents double-archiving
+// in 31-day months when both triggers fire.
 function createArchiveTrigger() {
   // Delete any existing archive triggers first to avoid duplicates
   ScriptApp.getProjectTriggers().forEach(t => {
@@ -648,14 +652,15 @@ function createArchiveTrigger() {
     }
   });
 
-  // Fire on the 28th of every month at 11pm
-  ScriptApp.newTrigger('archiveQuarterLeaderboard')
-    .timeBased()
-    .onMonthDay(28)
-    .atHour(23)
-    .create();
+  [30, 31].forEach(day => {
+    ScriptApp.newTrigger('archiveQuarterLeaderboard')
+      .timeBased()
+      .onMonthDay(day)
+      .atHour(23)
+      .create();
+  });
 
-  Logger.log('Archive trigger created — fires on the 28th of every month at 11pm.');
+  Logger.log('Archive triggers created — fires on the 30th and 31st of every month at 11pm.');
 }
 
 // ── Save deployment URL (run once after deploying) ────────────
@@ -692,4 +697,3 @@ function forceArchiveCurrentQuarter() {
   sendArchiveEmail_(quarterLabel, quarterKey);
   Logger.log(`Force-archived ${quarterLabel} with ${ranked.length} entries.`);
 }
-
