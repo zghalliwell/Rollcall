@@ -91,7 +91,7 @@ Members set to `FALSE` default to "Absent" on the attendance screen each session
 
 ### Step 6 -- Deploy as a Web App
 
-1. Click **Deploy > New deployment**
+1. Return to the Google Apps Script area and click **Deploy > New deployment**
 2. Click the gear icon > **Web app**
 3. Set:
    - **Execute as:** Me
@@ -118,7 +118,7 @@ Select `saveMyUrl` from the function dropdown at the top of the page and click *
 1. Select **`createArchiveTrigger`** from the function dropdown
 2. Click **Run**
 
-This registers a monthly trigger that fires on the 28th of March, June, September, and December at 11pm. It archives the quarter's leaderboard and emails you a link.
+This registers a monthly trigger that fires on the 28th of March, June, September, and December at 11pm. It archives the quarter's leaderboard to the history page and emails you a link.
 
 ### Step 9 -- Test it
 
@@ -160,7 +160,7 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 **Sessions:** One person clicks **Roll for Initiative**, marks attendance, and starts the session. Everyone else on the home screen is redirected automatically within 5 seconds, no refresh needed.
 
-**Rolling:** Each person taps their name, confirms it, and enters their D20 roll. The waiting screen shows live submission status, updating every 3 seconds. The **Let's go!** button stays locked until all present members have submitted.
+**Rolling:** Each person taps their name, confirms it, and enters their D20 roll. There is an optional "Roll For Me" button that will roll a d20 on the screen and submit the result for you. The waiting screen shows live submission status, updating every 3 seconds. The **Let's go!** button stays locked until all present members have submitted.
 
 **Rolloffs:** Ties trigger a rolloff round automatically. Only tied players roll again. Repeats until resolved.
 
@@ -172,18 +172,18 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 ## Maintenance
 
-After editing code files, create a new deployment version:
+If you ever have to update any of the code files, you'll need to redeploy them. After editing code files, create a new deployment version:
 1. **Deploy > Manage deployments > pencil icon**
 2. Change Version to **New version** > **Deploy**
 
-The URL stays the same.
+The URL stays the same if you just 
 
 **Useful functions to run from the editor:**
 
 | Function | What it does |
 |----------|-------------|
 | `cancelSession` | Clears a stuck session |
-| `wipeSheetsForTesting` | Clears all data except the Members roster |
+| `wipeSheetsForTesting` | Clears all data except the Members roster, usefull after running some testing rolls |
 | `forceArchiveCurrentQuarter` | Manually archives the current quarter |
 | `bootstrapSheets` | Re-creates missing sheets (safe to re-run) |
 
