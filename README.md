@@ -14,6 +14,7 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 - Bayesian leaderboard -- fair to occasional attendees; scores reflect real averages after about 8 sessions
 - Quarterly archiving -- leaderboards are saved automatically at the end of each quarter with an email notification
 - Confluence embeddable -- standalone leaderboard and history pages for iFrame embedding
+- Sound effects -- optional audio feedback for rolls, submissions, and nat 20s
 - Confetti on nat 20s
 
 ---
@@ -73,7 +74,7 @@ When done you should have four files in the left panel: `Code.gs`, `Index.html`,
 
 ### Step 4 -- Bootstrap the spreadsheet
 
-1. Select **`bootstrapSheets`** from the function dropdown at the top of the editor (it will probably be defaulted to "doPost" or something similar.)
+1. Select **`bootstrapSheets`** from the function dropdown at the top of the editor (it will probably default to "doPost" or something similar)
 2. Click **Run**
 3. Accept the permissions prompt -- click **Review permissions > your Gmail account > Advanced > Go to Rollcall (unsafe) > Allow**
 
@@ -118,7 +119,7 @@ Select `saveMyUrl` from the function dropdown at the top of the page and click *
 1. Select **`createArchiveTrigger`** from the function dropdown
 2. Click **Run**
 
-This registers a monthly trigger that fires on the 30th and 31st of every month. It first determins if the month is a quarter end month (March, June, September, December). If not, nothign happens. If it is a quarter end month, it archives the quarter's leaderboard to the history page and emails you a link.
+This registers triggers that fire on the 30th and 31st of every month. It first checks if the month is a quarter-end month (March, June, September, December). If not, nothing happens. If it is, it archives the quarter's leaderboard to the history page and emails you a link.
 
 ### Step 9 -- Test it
 
@@ -160,7 +161,7 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 **Sessions:** One person clicks **Roll for Initiative**, marks attendance, and starts the session. Everyone else on the home screen is redirected automatically within 5 seconds, no refresh needed.
 
-**Rolling:** Each person taps their name, confirms it, and enters their D20 roll. There is an optional "Roll For Me" button that will roll a d20 on the screen and submit the result for you. The waiting screen shows live submission status, updating every 3 seconds. The **Let's go!** button stays locked until all present members have submitted.
+**Rolling:** Each person taps their name, confirms it, and enters their D20 roll. There is an optional "Roll For Me" button that will roll a d20 on screen and submit the result automatically. The waiting screen shows live submission status, updating every 3 seconds. The **Let's go!** button stays locked until all present members have submitted.
 
 **Rolloffs:** Ties trigger a rolloff round automatically. Only tied players roll again. Repeats until resolved.
 
@@ -168,22 +169,24 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 **Archiving:** On the last day of each quarter-end month, the leaderboard is snapshotted to the PastLeaderboards sheet and you receive an email. Past quarters are viewable in the app under **Past Quarters**.
 
+**Sound effects:** The app plays audio feedback for dice rolls, submissions, session advances, and nat 20s. Sound is on by default and can be toggled at any time using the small toggle in the top-right corner of every screen. Anyone who needs to mute it can flip it off without affecting anyone else's audio -- each person's sound setting is local to their own browser.
+
 ---
 
 ## Maintenance
 
-If you ever have to update any of the code files, you'll need to redeploy them. After editing code files, create a new deployment version:
+If you ever have to update any of the code files, you'll need to redeploy. After editing code files, create a new deployment version:
 1. **Deploy > Manage deployments > pencil icon**
 2. Change Version to **New version** > **Deploy**
 
-The URL stays the same if you just 
+The URL stays the same as long as you update an existing deployment rather than creating a new one from scratch.
 
 **Useful functions to run from the editor:**
 
 | Function | What it does |
 |----------|-------------|
 | `cancelSession` | Clears a stuck session |
-| `wipeSheetsForTesting` | Clears all data except the Members roster, usefull after running some testing rolls |
+| `wipeSheetsForTesting` | Clears all data except the Members roster, useful after running test rolls |
 | `forceArchiveCurrentQuarter` | Manually archives the current quarter |
 | `bootstrapSheets` | Re-creates missing sheets (safe to re-run) |
 
