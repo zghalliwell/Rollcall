@@ -520,6 +520,20 @@ function showMyRollScreen() {
     return;
   }
 
+  // Always fetch fresh session state before rendering the roll screen
+  // to avoid stale rolloff round data causing submissions to go to the wrong round
+  rpc('poll', [], data => {
+    if (data) {
+      currentSession = data.session;
+      members = data.members || members;
+    }
+    _renderMyRollScreen();
+  });
+}
+
+function _renderMyRollScreen() {
+  if (!currentSession) { showScreen('screen-home'); return; }
+
   const inRolloff = currentSession.status === 'rolloff';
   const currentRound = inRolloff ? currentSession.rolloffRounds[currentSession.rolloffRounds.length - 1] : null;
   const rolloffNames = currentRound ? currentRound.groups.flat() : [];
@@ -548,6 +562,13 @@ function showMyRollScreen() {
     <input type="number" min="1" max="20" id="my-roll-input" placeholder="—" style="font-size:1.5rem;width:80px;"
       oninput="clampInput(this)" onblur="clampInput(this)" autofocus>
   </div>`;
+
+  // Always reset buttons to enabled state when the roll screen renders
+  const submitBtn = document.getElementById('btn-submit-roll');
+  const rollBtn = document.getElementById('btn-roll-for-me');
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Roll'; }
+  if (rollBtn) { rollBtn.disabled = false; rollBtn.textContent = '🎲 Roll for me'; }
+  document.getElementById('myroll-error').style.display = 'none';
 
   showScreen('screen-myroll');
 }
@@ -1040,7 +1061,7 @@ function rollForMe() {
     flashEl.style.opacity = '1';
   }, 950);
 
-  // Dismiss and fill input
+  // Dismiss and fill input, then submit directly with the captured result value
   setTimeout(() => {
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.3s ease';
@@ -1056,8 +1077,26 @@ function rollForMe() {
         input.style.background = 'rgba(123,111,212,0.3)';
         setTimeout(() => { input.style.background = ''; }, 400);
       }
-      // Auto-submit — no take-backs
-      submitMyRoll();
+      // Submit directly using the captured result and a fresh poll to get the correct
+      // session phase -- avoids stale currentSession causing rolloff submissions to
+      // call the wrong RPC function
+      rpc('poll', [], data => {
+        if (data) currentSession = data.session;
+        if (!currentSession) return;
+        const inRolloff = currentSession.status === 'rolloff';
+        const fn = inRolloff ? 'submitRolloffRoll' : 'submitRoll';
+        rpc(fn, [myName, result], rpcResult => {
+          if (!rpcResult || !rpcResult.success) {
+            document.getElementById('myroll-error').textContent = rpcResult?.error || 'Error submitting roll.';
+            document.getElementById('myroll-error').style.display = 'block';
+            document.getElementById('btn-submit-roll').disabled = false;
+            document.getElementById('btn-roll-for-me').disabled = false;
+            return;
+          }
+          currentSession = rpcResult.session;
+          showWaitingScreen();
+        });
+      });
     }, 300);
   }, 2200);
 }
