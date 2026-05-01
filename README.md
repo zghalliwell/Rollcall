@@ -118,7 +118,7 @@ Select `saveMyUrl` from the function dropdown at the top of the page and click *
 1. Select **`createArchiveTrigger`** from the function dropdown
 2. Click **Run**
 
-This registers a monthly trigger that fires on the 28th of March, June, September, and December at 11pm. It archives the quarter's leaderboard to the history page and emails you a link.
+This registers a monthly trigger that fires on the 30th and 31st of every month. It first determins if the month is a quarter end month (March, June, September, December). If not, nothign happens. If it is a quarter end month, it archives the quarter's leaderboard to the history page and emails you a link.
 
 ### Step 9 -- Test it
 
@@ -166,7 +166,7 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 **Leaderboard:** Ranked by Bayesian average with a confidence threshold of 8 sessions. Occasional attendees with a few lucky rolls won't outrank regulars.
 
-**Archiving:** On the 28th of each quarter-end month, the leaderboard is snapshotted to the PastLeaderboards sheet and you receive an email. Past quarters are viewable in the app under **Past Quarters**.
+**Archiving:** On the last day of each quarter-end month, the leaderboard is snapshotted to the PastLeaderboards sheet and you receive an email. Past quarters are viewable in the app under **Past Quarters**.
 
 ---
 
