@@ -305,6 +305,9 @@
 
   <button class="btn-primary btn-large" id="btn-letsgo" onclick="advanceSession()" disabled>Let's go!</button>
   <p class="patience">May take a few seconds to respond</p>
+  <div style="text-align:center;margin-top:1rem;">
+    <button class="btn-danger" onclick="cancelSessionUI()" style="font-size:0.8rem;letter-spacing:0.05em;">✕ Cancel Session</button>
+  </div>
 </div>
 
 <!-- RESULT -->
@@ -785,7 +788,17 @@ function fireConfetti() {
   draw();
 }
 
-// ── Remove person from active session ────────────────────────
+// ── Cancel session UI ─────────────────────────────────────────
+function cancelSessionUI() {
+  if (!confirm('Cancel this session? Everyone will be sent back to the home screen.')) return;
+  rpc('cancelSession', [], result => {
+    if (!result || !result.success) { alert('Error cancelling session.'); return; }
+    currentSession = null;
+    stopPolling();
+    showScreen('screen-home');
+    refreshHome();
+  });
+}
 function removeFromSession(name) {
   if (!confirm(`Remove ${name} from this session? Their roll won't be counted.`)) return;
   rpc('removeFromSession', [name], result => {
