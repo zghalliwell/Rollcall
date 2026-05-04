@@ -697,3 +697,19 @@ function forceArchiveCurrentQuarter() {
   sendArchiveEmail_(quarterLabel, quarterKey);
   Logger.log(`Force-archived ${quarterLabel} with ${ranked.length} entries.`);
 }
+function wipeSheetsForTesting() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetsToWipe = [
+    SHEET_NAMES.SESSIONS,
+    SHEET_NAMES.ROLLS,
+    SHEET_NAMES.SESSION_STATE,
+    SHEET_NAMES.PAST_LEADERBOARDS
+  ];
+  sheetsToWipe.forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (sheet && sheet.getLastRow() > 1) {
+      sheet.deleteRows(2, sheet.getLastRow() - 1);
+    }
+  });
+  Logger.log('Test data wiped. Members sheet left intact.');
+}
