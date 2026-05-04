@@ -128,7 +128,7 @@
   .my-roll-display { background:var(--surface2); border:1px solid var(--purple-dim); border-radius:8px; padding:0.6rem 1rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:10px; }
   .my-roll-val { font-family:'Cinzel',serif; font-size:1.4rem; color:var(--purple-glow); font-weight:700; }
 
-  @media(max-width:480px) { .screen{padding:1.25rem 1rem;} h1{font-size:1.5rem;} .waiting-grid{grid-template-columns:1fr;} }
+  .patience { text-align:center; color:var(--text-dim); font-size:0.85rem; letter-spacing:0.1em; text-transform:uppercase; margin-top:0.4rem; margin-bottom:0.75rem; }
 
   @keyframes diceShake {
     0%   { transform: rotate(0deg)   scale(1)    translateY(0); }
@@ -180,7 +180,7 @@
 <!-- HOME -->
 <div id="screen-home" class="screen active">
   <div class="d20-icon">⬡</div>
-  <h1>Initiative</h1>
+  <h1>RollCall</h1>
   <p class="subtitle">Daily Sync Order</p>
 
   <div class="card" style="margin-bottom:0.75rem;border-color:var(--purple-dim);">
@@ -203,7 +203,8 @@
     </div>
   </div>
 
-  <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.75rem;">⚔ Roll for Initiative</button>
+  <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.4rem;">⚔ Roll for Initiative</button>
+  <p class="patience">May take a few seconds to respond</p>
 
   <div class="card">
     <div class="card-header">
@@ -239,6 +240,7 @@
   </div>
   <div id="start-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
   <button class="btn-primary btn-large" onclick="beginSession()">Start Session</button>
+  <p class="patience">May take a few seconds to respond</p>
   <div style="height:0.75rem;"></div>
   <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">Cancel</button>
 </div>
@@ -258,7 +260,8 @@
     <div style="font-family:'Cinzel',serif;font-size:2rem;color:var(--purple-glow);margin-bottom:0.5rem;" id="nameconfirm-name"></div>
     <div style="color:var(--text-dim);font-size:0.85rem;">Tap confirm to continue</div>
   </div>
-  <button class="btn-primary btn-large" onclick="confirmName()" style="margin-bottom:0.75rem;">Yes, that's me</button>
+  <button class="btn-primary btn-large" onclick="confirmName()" style="margin-bottom:0.4rem;">Yes, that's me</button>
+  <p class="patience">May take a few seconds to respond</p>
   <button class="btn-ghost btn-large" onclick="showScreen('screen-namepicker')">That's not me →</button>
 </div>
 
@@ -278,8 +281,10 @@
   </div>
 
   <div id="myroll-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
-  <button class="btn-ghost btn-large" id="btn-roll-for-me" onclick="rollForMe()" style="margin-bottom:0.75rem;">🎲 Roll for me</button>
+  <button class="btn-ghost btn-large" id="btn-roll-for-me" onclick="rollForMe()" style="margin-bottom:0.4rem;">🎲 Roll for me</button>
+  <p class="patience">May take a few seconds to respond</p>
   <button class="btn-primary btn-large" id="btn-submit-roll" onclick="submitMyRoll()">Submit Roll</button>
+  <p class="patience">May take a few seconds to respond</p>
 </div>
 
 <!-- WAITING ROOM -->
@@ -299,6 +304,7 @@
   </div>
 
   <button class="btn-primary btn-large" id="btn-letsgo" onclick="advanceSession()" disabled>Let's go!</button>
+  <p class="patience">May take a few seconds to respond</p>
 </div>
 
 <!-- RESULT -->
@@ -307,6 +313,7 @@
   <p class="subtitle">Today's speaking order</p>
   <div id="result-list" style="margin-bottom:1.5rem;"></div>
   <button class="btn-primary btn-large" id="btn-done" onclick="setWorking(this,true);showScreen('screen-home');refreshHome();">Done!</button>
+  <p class="patience">May take a few seconds to respond</p>
 </div>
 
 <!-- MANAGE TEAM -->
