@@ -298,7 +298,7 @@
 
   <div id="rolloff-banner" class="rolloff-banner" style="display:none;"></div>
 
-  <div class="card">
+  <div class="card" id="waiting-grid-card">
     <div class="section-label" id="waiting-section-label">Roll Status</div>
     <div id="waiting-grid" class="waiting-grid"></div>
   </div>
@@ -484,8 +484,8 @@ function beginSession() {
   setWorking(btn, true);
 
   rpc('startSession', [presentNames], result => {
+    setWorking(btn, false);
     if (!result || !result.success) {
-      setWorking(btn, false);
       if (result && result.error === 'A session is already in progress') {
         rpc('poll', [], data => {
           currentSession = data.session;
@@ -673,10 +673,31 @@ function renderWaitingScreen() {
 
   const banner = document.getElementById('rolloff-banner');
   if (inRolloff) {
-    const tiedGroups = currentRound.groups;
-    const tiedDescriptions = tiedGroups.map(g => `${g.join(' & ')} (tied at ${getInitialRollForGroup(g)})`).join(' · ');
-    banner.textContent = `🎲 Roll Off: ${tiedDescriptions}`;
     banner.style.display = '';
+    const tiedGroups = currentRound.groups;
+    banner.innerHTML = `<div style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple-bright);margin-bottom:0.75rem;text-align:center;">🎲 Roll Off!</div>` +
+      tiedGroups.map(g => {
+        const tiedAt = getInitialRollForGroup(g);
+        return `<div style="background:var(--surface);border:1px solid var(--border-bright);border-radius:8px;padding:0.6rem 0.9rem;margin-bottom:0.5rem;">
+          <div style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--purple-bright);margin-bottom:0.4rem;">Tied at ${tiedAt}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${g.map(name => {
+              const hasRolled = currentRound.rolls[name] !== undefined;
+              const roll = currentRound.rolls[name];
+              const is20 = roll === 20;
+              const isMe = name === myName;
+              return `<div class="waiting-chip" style="flex:1;min-width:120px;${is20?'border-color:var(--gold);':''}">
+                <div class="dot ${hasRolled ? 'dot-done' : 'dot-waiting'}"></div>
+                <span style="${isMe?'color:var(--purple-glow);font-weight:500;':''}">${name}${isMe?' (you)':''}</span>
+                ${hasRolled
+                  ? `<span style="margin-left:auto;font-family:'Cinzel',serif;font-size:0.9rem;color:${is20?'var(--gold)':'var(--purple-bright)'};">${is20?'⚡20':roll}</span>`
+                  : `<button class="btn-danger" style="margin-left:auto;font-size:0.75rem;padding:0.15rem 0.4rem;" onclick="removeFromSession('${name}')">✕</button>`
+                }
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('');
   } else {
     banner.style.display = 'none';
   }
@@ -685,20 +706,28 @@ function renderWaitingScreen() {
   const rollMap = inRolloff ? currentRound.rolls : currentSession.rolls;
 
   const grid = document.getElementById('waiting-grid');
-  grid.innerHTML = relevantNames.map(name => {
-    const hasRolled = rollMap[name] !== undefined;
-    const isMe = name === myName;
-    const roll = rollMap[name];
-    const is20 = roll === 20;
-    return `<div class="waiting-chip" style="${is20 ? 'border-color:var(--gold);' : ''}">
-      <div class="dot ${hasRolled ? 'dot-done' : 'dot-waiting'}"></div>
-      <span style="${isMe ? 'color:var(--purple-glow);font-weight:500;' : ''}">${name}${isMe ? ' (you)' : ''}</span>
-      ${hasRolled
-        ? `<span style="margin-left:auto;font-family:'Cinzel',serif;font-size:0.9rem;color:${is20 ? 'var(--gold)' : 'var(--purple-bright)'};">${is20 ? '⚡20' : roll}</span>`
-        : `<button class="btn-danger" style="margin-left:auto;font-size:0.75rem;padding:0.15rem 0.4rem;" onclick="removeFromSession('${name}')">✕</button>`
-      }
-    </div>`;
-  }).join('');
+  const gridCard = document.getElementById('waiting-grid-card');
+  if (inRolloff) {
+    // Groups are rendered in the banner above, hide the grid card entirely
+    gridCard.style.display = 'none';
+    grid.innerHTML = '';
+  } else {
+    gridCard.style.display = '';
+    grid.innerHTML = relevantNames.map(name => {
+      const hasRolled = rollMap[name] !== undefined;
+      const isMe = name === myName;
+      const roll = rollMap[name];
+      const is20 = roll === 20;
+      return `<div class="waiting-chip" style="${is20 ? 'border-color:var(--gold);' : ''}">
+        <div class="dot ${hasRolled ? 'dot-done' : 'dot-waiting'}"></div>
+        <span style="${isMe ? 'color:var(--purple-glow);font-weight:500;' : ''}">${name}${isMe ? ' (you)' : ''}</span>
+        ${hasRolled
+          ? `<span style="margin-left:auto;font-family:'Cinzel',serif;font-size:0.9rem;color:${is20 ? 'var(--gold)' : 'var(--purple-bright)'};">${is20 ? '⚡20' : roll}</span>`
+          : `<button class="btn-danger" style="margin-left:auto;font-size:0.75rem;padding:0.15rem 0.4rem;" onclick="removeFromSession('${name}')">✕</button>`
+        }
+      </div>`;
+    }).join('');
+  }
 
   const allIn = relevantNames.every(n => rollMap[n] !== undefined);
   const btn = document.getElementById('btn-letsgo');
