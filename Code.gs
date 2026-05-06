@@ -247,10 +247,16 @@ function advanceFromRolloff() {
     const session = getCurrentSession();
     if (!session || session.status !== 'rolloff') return { success: false, error: 'Not in rolloff phase' };
     const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
-    const allRolloffNames = currentRound.groups.flat();
     if (!allRolloffNamesRolled_(currentRound)) return { success: false, error: 'Not everyone in rolloff has rolled' };
 
-    const stillTied = findTiedGroups_(allRolloffNames, currentRound.rolls);
+    // Check for ties within each group independently — groups are separate contests
+    // and should never be merged even if members of different groups rolled the same number
+    const stillTied = [];
+    currentRound.groups.forEach(group => {
+      const tiesWithinGroup = findTiedGroups_(group, currentRound.rolls);
+      tiesWithinGroup.forEach(t => stillTied.push(t));
+    });
+
     if (stillTied.length > 0) {
       session.rolloffRounds.push({ groups: stillTied, rolls: {} });
       setCurrentSession_(session);
@@ -696,20 +702,4 @@ function forceArchiveCurrentQuarter() {
 
   sendArchiveEmail_(quarterLabel, quarterKey);
   Logger.log(`Force-archived ${quarterLabel} with ${ranked.length} entries.`);
-}
-function wipeSheetsForTesting() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToWipe = [
-    SHEET_NAMES.SESSIONS,
-    SHEET_NAMES.ROLLS,
-    SHEET_NAMES.SESSION_STATE,
-    SHEET_NAMES.PAST_LEADERBOARDS
-  ];
-  sheetsToWipe.forEach(name => {
-    const sheet = ss.getSheetByName(name);
-    if (sheet && sheet.getLastRow() > 1) {
-      sheet.deleteRows(2, sheet.getLastRow() - 1);
-    }
-  });
-  Logger.log('Test data wiped. Members sheet left intact.');
 }
