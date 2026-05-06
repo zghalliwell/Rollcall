@@ -7,7 +7,17 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 ---
 ## Latest Updates — May 2026
 
-Two files were updated in this release: `Code.gs` and `Index.html`. To apply these updates to an existing deployment, replace the contents of each file in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**.
+Two files were updated in this release: `Code.gs` and `Index.html`. To apply these updates to an existing deployment:
+
+1. Open your Google Sheet and go to **Extensions > Apps Script**
+2. Click `Code.gs` in the left panel, select all, delete, and paste in the new `Code.gs` contents from this repo. Save with **Cmd+S** / **Ctrl+S**.
+3. Click `Index.html` in the left panel, select all, delete, and paste in the new `Index.html` contents from this repo. Save.
+4. Click **Deploy > Manage deployments**
+5. Click the **pencil icon** on your existing deployment
+6. Change the Version dropdown to **New version**
+7. Click **Deploy**
+
+Your URL stays the same. No other files need to be changed.
 
 ### Code.gs — Rolloff grouping fix
 
