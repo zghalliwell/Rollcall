@@ -5,6 +5,26 @@ A D20-based standup order roller for agile teams. Stop arguing about who goes fi
 Built on Google Apps Script. No server, no hosting fees, no dependencies. One URL for your whole team.
 
 ---
+## Latest Updates — May 2026
+
+Two files were updated in this release: `Code.gs` and `Index.html`. To apply these updates to an existing deployment, replace the contents of each file in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**.
+
+### Code.gs — Rolloff grouping fix
+
+Fixed a bug where members from separate rolloff contests could be incorrectly merged into a new group. For example, if Member 1 and Member 2 were in one rolloff and Member 3 and Member 4 were in a separate rolloff, and members from different groups happened to roll the same number, the app would incorrectly put them together in a new rolloff against each other. Rolloff groups are now always kept independent — ties are only checked within each original contest, never across contests.
+
+### Index.html — Rolloff display and misc fixes
+
+The waiting screen during a rolloff now shows each contest as its own clearly labeled card with a "Tied at X" header, so it's immediately obvious who is rolling against who when there are multiple simultaneous rolloffs. Previously all groups were listed in a single banner line which became hard to read.
+
+Also includes several earlier fixes accumulated over the past few sessions:
+
+- Submit button correctly re-enables if a roll submission fails
+- Roll screen always resets button states when navigating to it, preventing a Working... state from bleeding in from a previous screen
+- Fresh session state is fetched before rendering the roll entry screen, preventing stale rolloff round data from causing submissions to call the wrong backend function
+- Roll for Me auto-submit fetches fresh session state before submitting, fixing a bug where it could call the regular roll function instead of the rolloff function during a rolloff round
+- Cancel Session button added to the waiting screen
+- Sound effects added with a toggle in the top-right corner of every screen
 
 ## Features
 
