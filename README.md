@@ -5,36 +5,83 @@ A D20-based standup order roller for agile teams. Stop arguing about who goes fi
 Built on Google Apps Script. No server, no hosting fees, no dependencies. One URL for your whole team.
 
 ---
-## Latest Updates — May 2026
+---
 
-Two files were updated in this release: `Code.gs` and `Index.html`. To apply these updates to an existing deployment:
+<details>
+<summary><h1>📋 Release Notes — click to expand</h1></summary>
 
-1. Open your Google Sheet and go to **Extensions > Apps Script**
-2. Click `Code.gs` in the left panel, select all, delete, and paste in the new `Code.gs` contents from this repo. Save with **Cmd+S** / **Ctrl+S**.
-3. Click `Index.html` in the left panel, select all, delete, and paste in the new `Index.html` contents from this repo. Save.
-4. Click **Deploy > Manage deployments**
-5. Click the **pencil icon** on your existing deployment
-6. Change the Version dropdown to **New version**
-7. Click **Deploy**
+<br>
 
-Your URL stays the same. No other files need to be changed.
+<details>
+<summary><strong>May 8, 2026</strong> — Rolloff Screen Overhaul, UI Clarity Updates</summary>
 
-### Code.gs — Rolloff grouping fix
+### Files Updated
+`Index.html` only
 
+To apply: replace `Index.html` in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**. Your URL stays the same.
+
+---
+
+### Index.html
+
+**Rolloff screen redesign**
+The roll entry screen now looks completely different during a rolloff so people know they're in one. The heading changes to "R-R-R-R-ROLLOFF!" in gold with a glow effect, a pulsing 🧙 ⚔️ 💥 ⚔️ 🧙 battle line appears below it, and your opponent's name is displayed in a purple pill badge above the input area. A rolloff alert sound plays when you land on the screen.
+
+The waiting screen during a rolloff now shows the same "R-R-R-R-ROLLOFF!" header and emoji line at a smaller size. Each "Tied at X" label is now bold light purple instead of small dim text.
+
+**Rolloff sound effect**
+A four-tone alert sound plays when a player is routed to the rolloff entry screen, distinct from all other sounds in the app. Useful for people who are multitasking and might not notice the screen has changed.
+
+**UI clarity updates across all screens**
+Added instructional text throughout the app based on team feedback that the flow wasn't always clear:
+- Home screen: leader-only note added under Roll for Initiative; previous roll order moved above the leaderboard
+- Who's Here screen: instruction note added above Start Session
+- Who Are You screen: subtitle is now larger, bolder, and light purple
+- Is This You screen: card description updated to match the actual button label ("Yes, that's me")
+- Roll entry screen: full instruction card explaining both roll options (manual vs Roll for Me)
+- Waiting screen: Roll Status label, subtitle, and Last Checked text are now bold and light purple; leader-only note added above Let's go!
+- Result screen: Today's Speaking Order label is larger and bolder; roll numbers are larger and light purple; note added above Done explaining the session is over and the order persists on the home screen
+
+**Text color and contrast improvements**
+All instructional and patience note text switched from dim purple to light purple (`--purple-glow`) and made bold throughout. Roll count text in the leaderboard and order numbers in the Last Roll Order list also updated to light purple and bold. Last Roll Order header now matches the Leaderboard header style.
+
+</details>
+
+---
+
+<details>
+<summary><strong>May 6, 2026</strong> — Rolloff Grouping Fix, Rolloff Display, Misc Fixes</summary>
+
+### Files Updated
+`Code.gs` and `Index.html`
+
+To apply: replace each file in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**. Your URL stays the same.
+
+---
+
+### Code.gs
+
+**Rolloff grouping fix**
 Fixed a bug where members from separate rolloff contests could be incorrectly merged into a new group. For example, if Member 1 and Member 2 were in one rolloff and Member 3 and Member 4 were in a separate rolloff, and members from different groups happened to roll the same number, the app would incorrectly put them together in a new rolloff against each other. Rolloff groups are now always kept independent — ties are only checked within each original contest, never across contests.
 
-### Index.html — Rolloff display and misc fixes
+---
 
+### Index.html
+
+**Rolloff display**
 The waiting screen during a rolloff now shows each contest as its own clearly labeled card with a "Tied at X" header, so it's immediately obvious who is rolling against who when there are multiple simultaneous rolloffs. Previously all groups were listed in a single banner line which became hard to read.
 
-Also includes several earlier fixes accumulated over the past few sessions:
-
+**Misc fixes**
 - Submit button correctly re-enables if a roll submission fails
 - Roll screen always resets button states when navigating to it, preventing a Working... state from bleeding in from a previous screen
 - Fresh session state is fetched before rendering the roll entry screen, preventing stale rolloff round data from causing submissions to call the wrong backend function
 - Roll for Me auto-submit fetches fresh session state before submitting, fixing a bug where it could call the regular roll function instead of the rolloff function during a rolloff round
-- Cancel Session button added to the waiting screen
-- Sound effects added with a toggle in the top-right corner of every screen
+
+</details>
+
+</details>
+
+---
 
 ## Features
 
