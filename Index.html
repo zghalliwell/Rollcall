@@ -167,6 +167,13 @@
 </head>
 <body>
 
+<!-- Still here? overlay -->
+<div id="still-here-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,15,0.95);z-index:2000;align-items:center;justify-content:center;flex-direction:column;padding:2rem;text-align:center;">
+  <h1 style="font-size:2.5rem;color:var(--purple-glow);margin-bottom:1.25rem;">Are you still there?</h1>
+  <p style="color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;max-width:420px;line-height:1.8;margin-bottom:2rem;">Connection to the back end has paused to preserve resources. To continue with another roll, click Continue. If you're done, please close this tab.</p>
+  <button class="btn-primary btn-large" onclick="stillHereContinue()" style="max-width:320px;">Continue</button>
+</div>
+
 <!-- Fixed sound toggle — visible on every screen -->
 <div style="position:fixed;top:12px;right:14px;z-index:500;display:flex;align-items:center;gap:8px;background:rgba(10,10,15,0.75);border:1px solid var(--border);border-radius:20px;padding:5px 10px;backdrop-filter:blur(6px);">
   <span style="font-size:0.72rem;color:var(--text-dim);letter-spacing:0.06em;text-transform:uppercase;user-select:none;">🔊</span>
@@ -502,7 +509,7 @@ function beginSession() {
     setWorking(btn, false);
     if (!result || !result.success) {
       if (result && result.error === 'A session is already in progress') {
-        rpc('poll', [], data => {
+        rpc('pollSession', [], data => {
           currentSession = data.session;
           routeToSessionScreen();
         });
@@ -555,9 +562,14 @@ function showMyRollScreen() {
     return;
   }
 
-  // Always fetch fresh session state before rendering the roll screen
-  // to avoid stale rolloff round data causing submissions to go to the wrong round
-  rpc('poll', [], data => {
+  // Only fetch fresh state if we don't have it yet, or if we're in a rolloff
+  // (rolloff routing requires knowing the current round groups)
+  if (currentSession && currentSession.status === 'rolling') {
+    _renderMyRollScreen();
+    return;
+  }
+
+  rpc('pollSession', [], data => {
     if (data) {
       currentSession = data.session;
       members = data.members || members;
@@ -659,7 +671,6 @@ function submitMyRoll() {
       return;
     }
     playSound('confirm');
-    currentSession = result.session;
     showWaitingScreen();
   });
 }
@@ -673,10 +684,12 @@ function showWaitingScreen() {
 
 // ── Home screen polling (auto-redirect when session starts) ──
 let homepollTimer = null;
+let homeInactivityTimer = null;
 
 function startHomePolling() {
   stopHomePolling();
-  homepolling = true;
+  // Reset inactivity timer — show "still here?" after 2 minutes
+  resetHomeInactivityTimer();
   homepolling = setInterval(() => {
     rpc('poll', [], data => {
       if (!data) return;
@@ -695,6 +708,21 @@ function startHomePolling() {
 function stopHomePolling() {
   if (homepolling && homepolling !== true) { clearInterval(homepolling); }
   homepolling = null;
+  if (homeInactivityTimer) { clearTimeout(homeInactivityTimer); homeInactivityTimer = null; }
+}
+
+function resetHomeInactivityTimer() {
+  if (homeInactivityTimer) clearTimeout(homeInactivityTimer);
+  homeInactivityTimer = setTimeout(() => {
+    stopHomePolling();
+    const overlay = document.getElementById('still-here-overlay');
+    overlay.style.display = 'flex';
+  }, 120000); // 2 minutes
+}
+
+function stillHereContinue() {
+  document.getElementById('still-here-overlay').style.display = 'none';
+  startHomePolling();
 }
 
 let homepolling = null;
@@ -957,7 +985,7 @@ function showResultScreen() {
 // ── Polling ───────────────────────────────────────────────────
 function startPolling() {
   stopPolling();
-  pollTimer = setInterval(doPoll, 3000);
+  pollTimer = setInterval(doPoll, 1000);
   doPoll();
 }
 
@@ -968,9 +996,9 @@ function stopPolling() {
 function doPoll() {
   pollCount++;
   document.getElementById('poll-text').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
-  rpc('poll', [], data => {
+  rpc('pollSession', [], data => {
     if (!data) return;
-    members = data.members || [];
+    members = data.members || members;
     const prevStatus = currentSession ? currentSession.status : null;
     const prevRolloffLen = currentSession && currentSession.rolloffRounds ? currentSession.rolloffRounds.length : 0;
     currentSession = data.session;
@@ -1195,25 +1223,18 @@ function rollForMe() {
         input.style.background = 'rgba(123,111,212,0.3)';
         setTimeout(() => { input.style.background = ''; }, 400);
       }
-      // Submit directly using the captured result and a fresh poll to get the correct
-      // session phase -- avoids stale currentSession causing rolloff submissions to
-      // call the wrong RPC function
-      rpc('poll', [], data => {
-        if (data) currentSession = data.session;
-        if (!currentSession) return;
-        const inRolloff = currentSession.status === 'rolloff';
-        const fn = inRolloff ? 'submitRolloffRoll' : 'submitRoll';
-        rpc(fn, [myName, result], rpcResult => {
-          if (!rpcResult || !rpcResult.success) {
-            document.getElementById('myroll-error').textContent = rpcResult?.error || 'Error submitting roll.';
-            document.getElementById('myroll-error').style.display = 'block';
-            document.getElementById('btn-submit-roll').disabled = false;
-            document.getElementById('btn-roll-for-me').disabled = false;
-            return;
-          }
-          currentSession = rpcResult.session;
-          showWaitingScreen();
-        });
+      // Submit directly — per-row architecture means no session state read needed
+      const inRolloff = currentSession && currentSession.status === 'rolloff';
+      const fn = inRolloff ? 'submitRolloffRoll' : 'submitRoll';
+      rpc(fn, [myName, result], rpcResult => {
+        if (!rpcResult || !rpcResult.success) {
+          document.getElementById('myroll-error').textContent = rpcResult?.error || 'Error submitting roll.';
+          document.getElementById('myroll-error').style.display = 'block';
+          document.getElementById('btn-submit-roll').disabled = false;
+          document.getElementById('btn-roll-for-me').disabled = false;
+          return;
+        }
+        showWaitingScreen();
       });
     }, 300);
   }, 2200);
