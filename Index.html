@@ -677,6 +677,9 @@ function submitMyRoll() {
 
 // ── Waiting screen ────────────────────────────────────────────
 function showWaitingScreen() {
+  // Reset Let's go button in case Working... bled over from a previous action
+  const letsgoBtn = document.getElementById('btn-letsgo');
+  if (letsgoBtn) { letsgoBtn.disabled = true; letsgoBtn.textContent = "Let's go!"; }
   renderWaitingScreen();
   showScreen('screen-waiting');
   startPolling();
@@ -946,6 +949,9 @@ function advanceSession() {
 // ── Result screen ─────────────────────────────────────────────
 function showResultScreen() {
   if (!currentSession || !currentSession.finalOrder) return;
+  // Reset Done button in case Working... bled over from a previous action
+  const doneBtn = document.getElementById('btn-done');
+  if (doneBtn) { doneBtn.disabled = false; doneBtn.textContent = 'Done!'; }
   playSound('advance');
   const order = currentSession.finalOrder;
   const rollsMap = currentSession.rolls || {};
