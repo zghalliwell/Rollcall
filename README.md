@@ -112,6 +112,30 @@ The waiting screen during a rolloff now shows each contest as its own clearly la
 
 ---
 ---
+<details>
+<summary><h1>📸 Screenshots — click to expand</h1></summary>
+<br>
+<table align="center">
+  <tr>
+    <td align="center"><strong>Home Screen</strong><br><img src="screenshots/Home Screen.png" width="220"></td>
+    <td align="center"><strong>Attendance</strong><br><img src="screenshots/Attendance.png" width="220"></td>
+    <td align="center"><strong>Name Selection</strong><br><img src="screenshots/Name Selection.png" width="220"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Name Confirmation</strong><br><img src="screenshots/Name Confirmation.png" width="220"></td>
+    <td align="center"><strong>Entering Your Roll</strong><br><img src="screenshots/Entering your Roll.png" width="220"></td>
+    <td align="center"><strong>Waiting for Rolls</strong><br><img src="screenshots/Waiting for Rolls.png" width="220"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Rolloffs</strong><br><img src="screenshots/Rolloffs.png" width="220"></td>
+    <td align="center"><strong>Rolloff Waiting Screen</strong><br><img src="screenshots/Rolloff Waiting Screen.png" width="220"></td>
+    <td align="center"><strong>Final Initiative Order</strong><br><img src="screenshots/Final Initiative Order.png" width="220"></td>
+  </tr>
+</table>
+</details>
+
+---
+---
 
 ## Features
 
