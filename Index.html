@@ -87,7 +87,7 @@
 
   .prev-order-row { display:flex; align-items:center; gap:10px; padding:0.45rem 0; border-bottom:1px solid var(--border); font-size:0.95rem; }
   .prev-order-row:last-child { border-bottom:none; }
-  .prev-pos { color:var(--text-dim); min-width:20px; font-size:0.85rem; }
+  .prev-pos { color:var(--purple-glow); font-weight:700; min-width:20px; font-size:0.95rem; }
 
   .quarter-badge { display:inline-block; background:var(--surface2); border:1px solid var(--border-bright); border-radius:20px; padding:0.2rem 0.75rem; font-size:0.78rem; color:var(--purple-bright); letter-spacing:0.08em; text-transform:uppercase; font-weight:600; margin-left:8px; }
   .section-label { font-size:0.75rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:0.5rem; }
@@ -128,7 +128,7 @@
   .my-roll-display { background:var(--surface2); border:1px solid var(--purple-dim); border-radius:8px; padding:0.6rem 1rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:10px; }
   .my-roll-val { font-family:'Cinzel',serif; font-size:1.4rem; color:var(--purple-glow); font-weight:700; }
 
-  .patience { text-align:center; color:var(--text-dim); font-size:0.85rem; letter-spacing:0.1em; text-transform:uppercase; margin-top:0.4rem; margin-bottom:0.75rem; }
+  .patience { text-align:center; color:var(--purple-glow); font-size:0.9rem; letter-spacing:0.1em; text-transform:uppercase; margin-top:0.4rem; margin-bottom:0.75rem; font-weight:700; }
 
   @keyframes diceShake {
     0%   { transform: rotate(0deg)   scale(1)    translateY(0); }
@@ -205,6 +205,14 @@
 
   <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.4rem;">⚔ Roll for Initiative</button>
   <p class="patience">May take a few seconds to respond</p>
+  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:1rem;">Only the leader of the meeting needs to click Roll for Initiative</p>
+
+  <div id="prev-order-card" class="card" style="display:none;">
+    <div class="card-header">
+      <h2>Last Roll Order</h2>
+    </div>
+    <div id="prev-order-list"></div>
+  </div>
 
   <div class="card">
     <div class="card-header">
@@ -212,11 +220,6 @@
       <button class="btn-ghost" style="font-size:0.8rem;padding:0.3rem 0.75rem;" onclick="showManage()">Manage Team</button>
     </div>
     <div id="leaderboard-list"><div class="empty-state">Loading...</div></div>
-  </div>
-
-  <div id="prev-order-card" class="card" style="display:none;">
-    <div class="section-label">Last Roll Order</div>
-    <div id="prev-order-list"></div>
   </div>
 
   <button class="btn-ghost btn-large" onclick="showHistoryScreen()">📜 Past Quarters</button>
@@ -238,6 +241,7 @@
   <div class="card">
     <div id="start-member-list"></div>
   </div>
+  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:0.75rem;">Make sure everyone who is rolling today is marked Present, then click Start Session</p>
   <div id="start-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
   <button class="btn-primary btn-large" onclick="beginSession()">Start Session</button>
   <p class="patience">May take a few seconds to respond</p>
@@ -248,7 +252,7 @@
 <!-- NAME PICKER -->
 <div id="screen-namepicker" class="screen">
   <h1>Who Are You?</h1>
-  <p class="subtitle" id="namepicker-subtitle">Tap your name to continue</p>
+  <p id="namepicker-subtitle" style="text-align:center;color:var(--purple-glow);font-size:1.1rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;margin-bottom:1.5rem;">Tap your name to continue</p>
   <div id="name-button-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.5rem;"></div>
   <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">← Back</button>
 </div>
@@ -257,8 +261,8 @@
 <div id="screen-nameconfirm" class="screen">
   <h1 style="margin-bottom:1rem;">Is this you?</h1>
   <div id="nameconfirm-card" class="card" style="text-align:center;padding:2rem;">
-    <div style="font-family:'Cinzel',serif;font-size:2rem;color:var(--purple-glow);margin-bottom:0.5rem;" id="nameconfirm-name"></div>
-    <div style="color:var(--text-dim);font-size:0.85rem;">Tap confirm to continue</div>
+    <div style="font-family:'Cinzel',serif;font-size:2rem;color:var(--purple-glow);margin-bottom:0.75rem;" id="nameconfirm-name"></div>
+    <div style="color:var(--purple-glow);font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Tap Yes, that's me to continue!</div>
   </div>
   <button class="btn-primary btn-large" onclick="confirmName()" style="margin-bottom:0.4rem;">Yes, that's me</button>
   <p class="patience">May take a few seconds to respond</p>
@@ -267,13 +271,22 @@
 
 <!-- ENTER YOUR ROLL -->
 <div id="screen-myroll" class="screen">
-  <h1>Enter Your Roll</h1>
-  <p class="subtitle" id="myroll-subtitle">Roll a d20 and enter it below</p>
+  <h1 id="myroll-heading">Enter Your Roll</h1>
+  <div id="myroll-battle" style="display:none;"></div>
+  <div id="myroll-opponents" style="display:none;"></div>
 
   <!-- Dice animation overlay -->
   <div id="dice-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,15,0.92);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
     <div id="dice-anim" style="font-size:8rem;line-height:1;user-select:none;color:var(--purple-bright);filter:drop-shadow(0 0 12px rgba(163,148,240,0.5));">⬡</div>
     <div id="dice-result-flash" style="font-family:'Cinzel',serif;font-size:5rem;font-weight:700;color:var(--purple-glow);opacity:0;text-shadow:0 0 30px rgba(196,184,255,0.8);min-height:6rem;display:flex;align-items:center;justify-content:center;"></div>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem;text-align:center;">
+    <p style="color:var(--purple-glow);font-size:1rem;font-weight:700;letter-spacing:0.04em;line-height:1.7;">
+      Either roll a D20, enter it below, and click <strong style="color:var(--purple-glow);">Submit Roll</strong>.<br>
+      <span style="color:var(--purple-bright);font-size:1.1rem;">— OR —</span><br>
+      Click <strong style="color:var(--purple-glow);">Roll for Me</strong> to roll a virtual D20. Your roll will automatically submit itself.
+    </p>
   </div>
 
   <div class="card" id="myroll-card">
@@ -282,7 +295,7 @@
 
   <div id="myroll-error" class="error-text" style="margin-bottom:0.75rem;display:none;"></div>
   <button class="btn-ghost btn-large" id="btn-roll-for-me" onclick="rollForMe()" style="margin-bottom:0.4rem;">🎲 Roll for me</button>
-  <p class="patience">May take a few seconds to respond</p>
+  <p class="patience">If you choose Roll for Me, your roll will automatically be submitted after the roll</p>
   <button class="btn-primary btn-large" id="btn-submit-roll" onclick="submitMyRoll()">Submit Roll</button>
   <p class="patience">May take a few seconds to respond</p>
 </div>
@@ -290,19 +303,20 @@
 <!-- WAITING ROOM -->
 <div id="screen-waiting" class="screen">
   <h1 id="waiting-title">Waiting for Rolls</h1>
-  <p class="subtitle" id="waiting-subtitle">Refresh happens automatically</p>
+  <p id="waiting-subtitle" style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;margin-bottom:1.5rem;">Everyone needs to submit before continuing</p>
 
   <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999;display:none;"></canvas>
 
-  <div class="poll-status"><span class="spinner"></span><span id="poll-text">Checking for updates...</span></div>
+  <div class="poll-status"><span class="spinner"></span><span id="poll-text" style="color:var(--purple-glow);font-size:0.85rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Checking for updates...</span></div>
 
   <div id="rolloff-banner" class="rolloff-banner" style="display:none;"></div>
 
   <div class="card" id="waiting-grid-card">
-    <div class="section-label" id="waiting-section-label">Roll Status</div>
+    <div id="waiting-section-label" style="font-size:0.85rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--purple-glow);font-weight:700;margin-bottom:0.75rem;">Roll Status</div>
     <div id="waiting-grid" class="waiting-grid"></div>
   </div>
 
+  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:0.5rem;">Only the leader of the meeting needs to click Let's Go! once everyone has submitted</p>
   <button class="btn-primary btn-large" id="btn-letsgo" onclick="advanceSession()" disabled>Let's go!</button>
   <p class="patience">May take a few seconds to respond</p>
   <div style="text-align:center;margin-top:1rem;">
@@ -313,8 +327,9 @@
 <!-- RESULT -->
 <div id="screen-result" class="screen">
   <h1>Initiative Order</h1>
-  <p class="subtitle">Today's speaking order</p>
+  <p style="text-align:center;color:var(--purple-glow);font-size:1rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;margin-bottom:1.5rem;">Today's Speaking Order</p>
   <div id="result-list" style="margin-bottom:1.5rem;"></div>
+  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:0.5rem;">The session has ended. Clicking Done will only close this screen for you. The most recent roll order will always be displayed on the home screen.</p>
   <button class="btn-primary btn-large" id="btn-done" onclick="setWorking(this,true);showScreen('screen-home');refreshHome();">Done!</button>
   <p class="patience">May take a few seconds to respond</p>
 </div>
@@ -403,7 +418,7 @@ function renderLeaderboard(lb) {
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
           <span style="font-weight:500;font-size:1rem;">${e.name}</span>
-          <span style="font-size:0.75rem;color:var(--text-dim);">${countStr}</span>
+          <span style="font-size:0.8rem;color:var(--purple-glow);font-weight:700;">${countStr}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">
@@ -572,12 +587,38 @@ function _renderMyRollScreen() {
     return;
   }
 
-  document.getElementById('myroll-subtitle').textContent = inRolloff
-    ? `Roll Off! You tied — roll again`
-    : 'Roll a d20 and enter it below';
+  // Update heading and instruction card for rolloff vs normal roll
+  const heading = document.getElementById('myroll-heading');
+  const battleArea = document.getElementById('myroll-battle');
+  const opponentArea = document.getElementById('myroll-opponents');
 
-  const fields = document.getElementById('myroll-fields');
-  fields.innerHTML = `<div class="roll-row" style="border:none;padding:0.5rem 0;">
+  if (inRolloff) {
+    // Find the group this person is in
+    const myGroup = currentRound.groups.find(g => g.includes(myName));
+    const opponents = myGroup ? myGroup.filter(n => n !== myName) : [];
+
+    heading.textContent = 'R-R-R-R-ROLLOFF!';
+    heading.style.color = 'var(--gold)';
+    heading.style.textShadow = '0 0 20px rgba(212,170,68,0.6)';
+    playSound('rolloff');
+
+    battleArea.style.display = 'block';
+    battleArea.innerHTML = `<div style="font-size:3.5rem;text-align:center;letter-spacing:0.1em;margin:0.5rem 0;animation:pulse 1s infinite;">🧙 ⚔️ 💥 ⚔️ 🧙</div>`;
+
+    opponentArea.style.display = 'block';
+    opponentArea.innerHTML = `<p style="text-align:center;color:var(--purple-glow);font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.5rem;">You're in a roll off with:</p>
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:0.75rem;">
+        ${opponents.map(n => `<span style="background:var(--purple-dim);border:1px solid var(--purple-mid);border-radius:20px;padding:0.2rem 0.9rem;font-family:'Cinzel',serif;font-size:1rem;color:var(--purple-glow);font-weight:600;">${n}</span>`).join('')}
+      </div>`;
+  } else {
+    heading.textContent = 'Enter Your Roll';
+    heading.style.color = 'var(--purple-glow)';
+    heading.style.textShadow = '';
+    battleArea.style.display = 'none';
+    opponentArea.style.display = 'none';
+  }
+
+  document.getElementById('myroll-fields').innerHTML = `<div class="roll-row" style="border:none;padding:0.5rem 0;">
     <span class="name-label">${myName}</span>
     <input type="number" min="1" max="20" id="my-roll-input" placeholder="—" style="font-size:1.5rem;width:80px;"
       oninput="clampInput(this)" onblur="clampInput(this)" autofocus>
@@ -667,19 +708,19 @@ function renderWaitingScreen() {
 
   document.getElementById('waiting-title').textContent = inRolloff ? 'Roll Off!' : 'Waiting for Rolls';
   document.getElementById('waiting-subtitle').textContent = inRolloff
-    ? 'Tied members need to roll again'
+    ? 'Tied members need to roll again — everyone else just waits'
     : 'Everyone needs to submit before continuing';
-  document.getElementById('waiting-section-label').textContent = inRolloff ? 'Rolloff Status' : 'Roll Status';
 
   const banner = document.getElementById('rolloff-banner');
   if (inRolloff) {
     banner.style.display = '';
     const tiedGroups = currentRound.groups;
-    banner.innerHTML = `<div style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple-bright);margin-bottom:0.75rem;text-align:center;">🎲 Roll Off!</div>` +
+    banner.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--gold);text-shadow:0 0 12px rgba(212,170,68,0.5);text-align:center;letter-spacing:0.05em;margin-bottom:0.4rem;">R-R-R-R-ROLLOFF!</div>
+      <div style="font-size:1.8rem;text-align:center;letter-spacing:0.1em;margin-bottom:0.75rem;animation:pulse 1s infinite;">🧙 ⚔️ 💥 ⚔️ 🧙</div>` +
       tiedGroups.map(g => {
         const tiedAt = getInitialRollForGroup(g);
         return `<div style="background:var(--surface);border:1px solid var(--border-bright);border-radius:8px;padding:0.6rem 0.9rem;margin-bottom:0.5rem;">
-          <div style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--purple-bright);margin-bottom:0.4rem;">Tied at ${tiedAt}</div>
+          <div style="font-size:0.9rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--purple-glow);font-weight:700;margin-bottom:0.4rem;">Tied at ${tiedAt}</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;">
             ${g.map(name => {
               const hasRolled = currentRound.rolls[name] !== undefined;
@@ -901,13 +942,13 @@ function showResultScreen() {
     return `<div class="result-row" style="animation-delay:${i*0.06}s;${isMe?'border-color:var(--purple-mid);':''}">
       <div class="rank-badge ${rankClass}">${i+1}</div>
       <span class="result-name" style="${isMe?'color:var(--purple-glow);':''}">${name}${isMe?' ✦':''}</span>
-      <span class="dice-roll">${rollInfo}</span>
+      <span style="font-size:0.95rem;font-weight:600;color:var(--purple-bright);">${rollInfo}</span>
     </div>`;
   }).join('');
 
   const absentNames = members.filter(m => !currentSession.presentNames.includes(m.name)).map(m => m.name);
   if (absentNames.length > 0) {
-    list.innerHTML += `<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--text-dim);font-size:0.85rem;">Absent: ${absentNames.join(', ')}</div>`;
+    list.innerHTML += `<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--purple-bright);font-size:0.95rem;font-weight:600;">Absent: ${absentNames.join(', ')}</div>`;
   }
 
   showScreen('screen-result');
@@ -1081,9 +1122,10 @@ function rollForMe() {
   const diceEl  = document.getElementById('dice-anim');
   const flashEl = document.getElementById('dice-result-flash');
 
-  // Immediately disable both buttons
+  // Immediately disable both buttons, Submit Roll shows Working...
   document.getElementById('btn-roll-for-me').disabled = true;
-  document.getElementById('btn-submit-roll').disabled = true;
+  const submitBtn = document.getElementById('btn-submit-roll');
+  setWorking(submitBtn, true);
 
   // Reset
   diceEl.style.animation = 'none';
@@ -1353,6 +1395,27 @@ function playSound(name) {
           g.gain.linearRampToValueAtTime(0.14, t + 0.03);
           g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
           o.start(t); o.stop(t + 0.3);
+        });
+      },
+      // Rolloff alert -- two-tone rising pulse, attention-grabbing but not aggressive
+      rolloff: (ctx) => {
+        const tones = [
+          { freq: 440, start: 0,    dur: 0.12 },
+          { freq: 660, start: 0.15, dur: 0.12 },
+          { freq: 440, start: 0.30, dur: 0.12 },
+          { freq: 880, start: 0.45, dur: 0.22 }
+        ];
+        tones.forEach(({ freq, start, dur }) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.value = freq;
+          const t = ctx.currentTime + start;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          o.start(t); o.stop(t + dur + 0.05);
         });
       },
       // Result reveal
