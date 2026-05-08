@@ -4,15 +4,16 @@
 // ============================================================
 
 const SHEET_NAMES = {
-  CONFIG:   'Config',
-  MEMBERS:  'Members',
-  SESSIONS: 'Sessions',
-  ROLLS:    'Rolls',
-  SESSION_STATE: 'SessionState',
+  CONFIG:            'Config',
+  MEMBERS:           'Members',
+  SESSIONS:          'Sessions',
+  ROLLS:             'Rolls',
+  SESSION_STATE:     'SessionState',
+  SESSION_ROLLS:     'SessionRolls',
   PAST_LEADERBOARDS: 'PastLeaderboards'
 };
 
-const BAYESIAN_C = 8; // confidence threshold — sessions needed to "earn" your full average
+const BAYESIAN_C = 8;
 
 // ── doGet ────────────────────────────────────────────────────
 function doGet(e) {
@@ -44,13 +45,13 @@ function getOrCreateSheet_(name, headers) {
 }
 
 function bootstrapSheets() {
-  getOrCreateSheet_(SHEET_NAMES.MEMBERS, ['name', 'defaultPresent']);
-  getOrCreateSheet_(SHEET_NAMES.SESSIONS, ['sessionId', 'date', 'status', 'finalOrder']);
-  getOrCreateSheet_(SHEET_NAMES.ROLLS, ['sessionId', 'name', 'initialRoll', 'rolloffRoll', 'present', 'effectiveRoll']);
-  getOrCreateSheet_(SHEET_NAMES.SESSION_STATE, ['key', 'value']);
+  getOrCreateSheet_(SHEET_NAMES.MEMBERS,           ['name', 'defaultPresent']);
+  getOrCreateSheet_(SHEET_NAMES.SESSIONS,          ['sessionId', 'date', 'status', 'finalOrder']);
+  getOrCreateSheet_(SHEET_NAMES.ROLLS,             ['sessionId', 'name', 'initialRoll', 'rolloffRoll', 'present', 'effectiveRoll']);
+  getOrCreateSheet_(SHEET_NAMES.SESSION_STATE,     ['key', 'value']);
+  getOrCreateSheet_(SHEET_NAMES.SESSION_ROLLS,     ['sessionId', 'name', 'roll', 'rolloffRoll', 'roundIndex', 'status']);
   getOrCreateSheet_(SHEET_NAMES.PAST_LEADERBOARDS, ['quarterKey', 'quarterLabel', 'archivedAt', 'rank', 'name', 'bayesian', 'rawAvg', 'count']);
 
-  // Seed default members if Members sheet is empty (no data rows)
   const membersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.MEMBERS);
   if (membersSheet.getLastRow() <= 1) {
     const defaults = [
@@ -108,7 +109,11 @@ function removeMember(name) {
   return { success: false, error: 'Member not found' };
 }
 
-// ── Session State ────────────────────────────────────────────
+// ── Session State ─────────────────────────────────────────────
+// SessionState stores lightweight metadata only:
+// sessionId, date, status, presentNames, rolloffRounds, finalOrder
+// Rolls are stored per-row in SessionRolls — no lock needed for submits.
+
 function getStateValue_(key) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSION_STATE);
   if (!sheet || sheet.getLastRow() <= 1) return null;
@@ -133,12 +138,9 @@ function setStateValue_(key, value) {
 
 function clearSessionState_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSION_STATE);
-  if (sheet.getLastRow() > 1) {
-    sheet.deleteRows(2, sheet.getLastRow() - 1);
-  }
+  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
 }
 
-// ── Current Session ──────────────────────────────────────────
 function getCurrentSession() {
   const raw = getStateValue_('currentSession');
   if (!raw) return null;
@@ -149,7 +151,77 @@ function setCurrentSession_(session) {
   setStateValue_('currentSession', JSON.stringify(session));
 }
 
-// ── Start a new roll session ─────────────────────────────────
+// ── SessionRolls helpers ──────────────────────────────────────
+// Columns: sessionId | name | roll | rolloffRoll | roundIndex | status
+// status: 'pending' | 'submitted'
+// roundIndex: 0 = initial roll, 1+ = rolloff rounds
+// Each person has one row per round they participate in.
+
+function getSessionRollsSheet_() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSION_ROLLS);
+}
+
+// Write one row per present member when session starts (roundIndex=0)
+function initSessionRollRows_(sessionId, presentNames) {
+  const sheet = getSessionRollsSheet_();
+  presentNames.forEach(name => {
+    sheet.appendRow([sessionId, name, '', '', 0, 'pending']);
+  });
+}
+
+// Write rolloff rows for a new round
+function initRolloffRows_(sessionId, groups, roundIndex) {
+  const sheet = getSessionRollsSheet_();
+  groups.flat().forEach(name => {
+    sheet.appendRow([sessionId, name, '', '', roundIndex, 'pending']);
+  });
+}
+
+// Find a specific member's row for this session and round
+function findRollRow_(sessionId, name, roundIndex) {
+  const sheet = getSessionRollsSheet_();
+  if (sheet.getLastRow() <= 1) return null;
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0]) === sessionId &&
+        String(data[i][1]).toLowerCase() === name.toLowerCase() &&
+        parseInt(data[i][4]) === roundIndex &&
+        String(data[i][5]) === 'pending') {
+      return i + 2; // 1-indexed sheet row
+    }
+  }
+  return null;
+}
+
+// Read all submitted rolls for a session and round
+function getSubmittedRolls_(sessionId, roundIndex) {
+  const sheet = getSessionRollsSheet_();
+  if (sheet.getLastRow() <= 1) return {};
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  const result = {};
+  data.forEach(r => {
+    if (String(r[0]) === sessionId &&
+        parseInt(r[4]) === roundIndex &&
+        String(r[5]) === 'submitted') {
+      result[String(r[1])] = parseInt(r[2]);
+    }
+  });
+  return result;
+}
+
+// Clean up session rolls rows for a completed session
+function clearSessionRollRows_(sessionId) {
+  const sheet = getSessionRollsSheet_();
+  if (sheet.getLastRow() <= 1) return;
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (String(data[i][0]) === sessionId) {
+      sheet.deleteRow(i + 2);
+    }
+  }
+}
+
+// ── Start a new roll session ──────────────────────────────────
 function startSession(presentNames) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -162,37 +234,60 @@ function startSession(presentNames) {
     const session = {
       sessionId,
       date: new Date().toISOString(),
-      status: 'rolling', // rolling | rolloff | complete
+      status: 'rolling',
       presentNames,
-      rolls: {},           // name -> roll value
-      rolloffRounds: [],   // array of { groups: [[name,...]], rolls: {name: value} }
+      rolloffRounds: [],
       finalOrder: []
     };
     setCurrentSession_(session);
-    return { success: true, session: sanitizeSession_(session) };
+    initSessionRollRows_(sessionId, presentNames);
+    return { success: true, session: buildClientSession_(session) };
   } finally {
     lock.releaseLock();
   }
 }
 
-// ── Submit a roll ────────────────────────────────────────────
+// ── Submit a roll — NO LOCK, writes only to the member's own row ──
 function submitRoll(name, roll) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const session = getCurrentSession();
-    if (!session) return { success: false, error: 'No active session' };
-    if (session.status !== 'rolling') return { success: false, error: 'Not in rolling phase' };
-    if (!session.presentNames.includes(name)) return { success: false, error: 'Not in present list' };
-    roll = parseInt(roll);
-    if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
+  const session = getCurrentSession();
+  if (!session) return { success: false, error: 'No active session' };
+  if (session.status !== 'rolling') return { success: false, error: 'Not in rolling phase' };
+  if (!session.presentNames.includes(name)) return { success: false, error: 'Not in present list' };
+  roll = parseInt(roll);
+  if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
 
-    session.rolls[name] = roll;
-    setCurrentSession_(session);
-    return { success: true, session: sanitizeSession_(session) };
-  } finally {
-    lock.releaseLock();
-  }
+  const rowIndex = findRollRow_(session.sessionId, name, 0);
+  if (!rowIndex) return { success: false, error: 'Roll row not found' };
+
+  const sheet = getSessionRollsSheet_();
+  sheet.getRange(rowIndex, 3).setValue(roll);
+  sheet.getRange(rowIndex, 6).setValue('submitted');
+
+  // Return minimal response — client goes to waiting screen and polls for state
+  return { success: true };
+}
+
+// ── Submit a rolloff roll — NO LOCK ──────────────────────────
+function submitRolloffRoll(name, roll) {
+  const session = getCurrentSession();
+  if (!session || session.status !== 'rolloff') return { success: false, error: 'Not in rolloff phase' };
+  const roundIndex = session.rolloffRounds.length;
+  roll = parseInt(roll);
+  if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
+
+  const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
+  const allRolloffNames = currentRound.groups.flat();
+  if (!allRolloffNames.includes(name)) return { success: false, error: 'Not in rolloff' };
+
+  const rowIndex = findRollRow_(session.sessionId, name, roundIndex);
+  if (!rowIndex) return { success: false, error: 'Rolloff row not found' };
+
+  const sheet = getSessionRollsSheet_();
+  sheet.getRange(rowIndex, 3).setValue(roll);
+  sheet.getRange(rowIndex, 6).setValue('submitted');
+
+  // Return minimal response — client goes to waiting screen and polls for state
+  return { success: true };
 }
 
 // ── Advance after all rolls submitted ────────────────────────
@@ -202,38 +297,23 @@ function advanceFromRolling() {
   try {
     const session = getCurrentSession();
     if (!session || session.status !== 'rolling') return { success: false, error: 'Not in rolling phase' };
-    if (!allPresentsRolled_(session)) return { success: false, error: 'Not everyone has rolled' };
 
-    const tiedGroups = findTiedGroups_(session.presentNames, session.rolls);
+    const rolls = getSubmittedRolls_(session.sessionId, 0);
+    if (!session.presentNames.every(n => rolls[n] !== undefined)) {
+      return { success: false, error: 'Not everyone has rolled' };
+    }
+
+    const tiedGroups = findTiedGroups_(session.presentNames, rolls);
     if (tiedGroups.length > 0) {
       session.status = 'rolloff';
-      session.rolloffRounds.push({ groups: tiedGroups, rolls: {} });
+      session.rolloffRounds.push({ groups: tiedGroups });
       setCurrentSession_(session);
-      return { success: true, session: sanitizeSession_(session) };
+      // Write pending rows for rolloff participants
+      initRolloffRows_(session.sessionId, tiedGroups, 1);
+      return { success: true, session: buildClientSession_(session) };
     } else {
-      return finalizeSession_(session);
+      return finalizeSession_(session, rolls, []);
     }
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ── Submit a rolloff roll ────────────────────────────────────
-function submitRolloffRoll(name, roll) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const session = getCurrentSession();
-    if (!session || session.status !== 'rolloff') return { success: false, error: 'Not in rolloff phase' };
-    const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
-    const allRolloffNames = currentRound.groups.flat();
-    if (!allRolloffNames.includes(name)) return { success: false, error: 'Not in rolloff' };
-
-    roll = parseInt(roll);
-    if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
-    currentRound.rolls[name] = roll;
-    setCurrentSession_(session);
-    return { success: true, session: sanitizeSession_(session) };
   } finally {
     lock.releaseLock();
   }
@@ -246,53 +326,59 @@ function advanceFromRolloff() {
   try {
     const session = getCurrentSession();
     if (!session || session.status !== 'rolloff') return { success: false, error: 'Not in rolloff phase' };
-    const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
-    if (!allRolloffNamesRolled_(currentRound)) return { success: false, error: 'Not everyone in rolloff has rolled' };
 
-    // Check for ties within each group independently — groups are separate contests
-    // and should never be merged even if members of different groups rolled the same number
+    const roundIndex = session.rolloffRounds.length;
+    const currentRound = session.rolloffRounds[roundIndex - 1];
+    const allRolloffNames = currentRound.groups.flat();
+    const rolloffRolls = getSubmittedRolls_(session.sessionId, roundIndex);
+
+    if (!allRolloffNames.every(n => rolloffRolls[n] !== undefined)) {
+      return { success: false, error: 'Not everyone in rolloff has rolled' };
+    }
+
+    // Check for ties within each group independently
     const stillTied = [];
     currentRound.groups.forEach(group => {
-      const tiesWithinGroup = findTiedGroups_(group, currentRound.rolls);
-      tiesWithinGroup.forEach(t => stillTied.push(t));
+      findTiedGroups_(group, rolloffRolls).forEach(t => stillTied.push(t));
     });
 
     if (stillTied.length > 0) {
-      session.rolloffRounds.push({ groups: stillTied, rolls: {} });
+      const nextRoundIndex = roundIndex + 1;
+      session.rolloffRounds.push({ groups: stillTied });
       setCurrentSession_(session);
-      return { success: true, session: sanitizeSession_(session) };
+      initRolloffRows_(session.sessionId, stillTied, nextRoundIndex);
+      return { success: true, session: buildClientSession_(session) };
     } else {
-      return finalizeSession_(session);
+      // Collect all rolls across all rounds
+      const initialRolls = getSubmittedRolls_(session.sessionId, 0);
+      const allRolloffRounds = [];
+      for (let i = 1; i <= roundIndex; i++) {
+        allRolloffRounds.push(getSubmittedRolls_(session.sessionId, i));
+      }
+      return finalizeSession_(session, initialRolls, allRolloffRounds);
     }
   } finally {
     lock.releaseLock();
   }
 }
 
-// ── Finalize ─────────────────────────────────────────────────
-function finalizeSession_(session) {
-  const order = computeFinalOrder_(session);
+// ── Finalize ──────────────────────────────────────────────────
+function finalizeSession_(session, initialRolls, allRolloffRounds) {
+  const order = computeFinalOrder_(session.presentNames, initialRolls, allRolloffRounds);
   session.status = 'complete';
   session.finalOrder = order;
   setCurrentSession_(session);
-
-  // Persist to Rolls + Sessions sheets
-  persistSession_(session);
-
-  return { success: true, session: sanitizeSession_(session) };
+  persistSession_(session, initialRolls, allRolloffRounds);
+  clearSessionRollRows_(session.sessionId);
+  return { success: true, session: buildClientSession_(session, initialRolls, allRolloffRounds) };
 }
 
-function persistSession_(session) {
+function persistSession_(session, initialRolls, allRolloffRounds) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sessionsSheet = ss.getSheetByName(SHEET_NAMES.SESSIONS);
   const rollsSheet = ss.getSheetByName(SHEET_NAMES.ROLLS);
 
-  sessionsSheet.appendRow([
-    session.sessionId,
-    session.date,
-    'complete',
-    session.finalOrder.join(', ')
-  ]);
+  sessionsSheet.appendRow([session.sessionId, session.date, 'complete', session.finalOrder.join(', ')]);
 
   const members = getMembers_();
   members.forEach(m => {
@@ -301,56 +387,74 @@ function persistSession_(session) {
       rollsSheet.appendRow([session.sessionId, m.name, '', '', false, '']);
       return;
     }
-    const initialRoll = session.rolls[m.name] || '';
-    const rolloffRoll = getLastRolloffRoll_(session, m.name);
-    const effective = computeEffectiveRoll_(session, m.name);
+    const initialRoll = initialRolls[m.name] || '';
+    const rolloffRoll = getLastRolloffRollFromRounds_(m.name, allRolloffRounds);
+    const effective = rolloffRoll !== null ? (initialRoll + rolloffRoll) / 2 : initialRoll;
     rollsSheet.appendRow([session.sessionId, m.name, initialRoll, rolloffRoll || '', true, effective]);
   });
 }
 
-function getLastRolloffRoll_(session, name) {
-  for (let i = session.rolloffRounds.length - 1; i >= 0; i--) {
-    const round = session.rolloffRounds[i];
-    if (round.rolls[name] !== undefined) return round.rolls[name];
+function getLastRolloffRollFromRounds_(name, allRolloffRounds) {
+  for (let i = allRolloffRounds.length - 1; i >= 0; i--) {
+    if (allRolloffRounds[i][name] !== undefined) return allRolloffRounds[i][name];
   }
   return null;
 }
 
-function computeEffectiveRoll_(session, name) {
-  const initial = session.rolls[name];
-  const rolloff = getLastRolloffRoll_(session, name);
-  if (rolloff !== null && rolloff !== undefined) {
-    return (initial + rolloff) / 2;
-  }
-  return initial;
-}
-
-// ── Order computation ────────────────────────────────────────
-function computeFinalOrder_(session) {
-  const resolved = []; // names in order, resolved
-  const resolvedSet = new Set();
-
-  // Build a per-name "tiebreaker chain" from rolloff rounds
+// ── Order computation ─────────────────────────────────────────
+function computeFinalOrder_(presentNames, initialRolls, allRolloffRounds) {
   function getRolloffScore(name) {
-    for (let i = session.rolloffRounds.length - 1; i >= 0; i--) {
-      const round = session.rolloffRounds[i];
-      if (round.rolls[name] !== undefined) return round.rolls[name];
+    for (let i = allRolloffRounds.length - 1; i >= 0; i--) {
+      if (allRolloffRounds[i][name] !== undefined) return allRolloffRounds[i][name];
     }
     return -1;
   }
-
-  // Sort present names: primary = initial roll desc, secondary = rolloff desc
-  const sorted = [...session.presentNames].sort((a, b) => {
-    const ar = session.rolls[a] || 0;
-    const br = session.rolls[b] || 0;
+  return [...presentNames].sort((a, b) => {
+    const ar = initialRolls[a] || 0;
+    const br = initialRolls[b] || 0;
     if (ar !== br) return br - ar;
     return getRolloffScore(b) - getRolloffScore(a);
   });
-
-  return sorted;
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Build client session object ───────────────────────────────
+// Assembles the session object the client expects, reading live
+// roll data from SessionRolls rather than from the session JSON.
+function buildClientSession_(session, initialRolls, allRolloffRounds) {
+  const sessionId = session.sessionId;
+  const rounds = session.rolloffRounds || [];
+
+  // Read initial rolls from sheet if not passed in
+  if (!initialRolls) {
+    initialRolls = getSubmittedRolls_(sessionId, 0);
+  }
+
+  // Read all rolloff rounds from sheet if not passed in
+  if (!allRolloffRounds) {
+    allRolloffRounds = [];
+    for (let i = 1; i <= rounds.length; i++) {
+      allRolloffRounds.push(getSubmittedRolls_(sessionId, i));
+    }
+  }
+
+  // Build rolloffRounds in the format the client expects
+  const clientRolloffRounds = rounds.map((round, i) => ({
+    groups: round.groups,
+    rolls: allRolloffRounds[i] || {}
+  }));
+
+  return {
+    sessionId: session.sessionId,
+    date: session.date,
+    status: session.status,
+    presentNames: session.presentNames,
+    rolls: initialRolls,
+    rolloffRounds: clientRolloffRounds,
+    finalOrder: session.finalOrder || []
+  };
+}
+
+// ── Helpers ───────────────────────────────────────────────────
 function findTiedGroups_(names, rollMap) {
   const groups = {};
   names.forEach(n => {
@@ -362,21 +466,11 @@ function findTiedGroups_(names, rollMap) {
   return Object.values(groups).filter(g => g.length > 1);
 }
 
-function allPresentsRolled_(session) {
-  return session.presentNames.every(n => session.rolls[n] !== undefined);
-}
-
-function allRolloffNamesRolled_(round) {
-  const names = round.groups.flat();
-  return names.every(n => round.rolls[n] !== undefined);
-}
-
 function sanitizeSession_(session) {
-  // Returns a safe copy for client — no internal GAS objects
   return JSON.parse(JSON.stringify(session));
 }
 
-// ── Leaderboard ──────────────────────────────────────────────
+// ── Leaderboard ───────────────────────────────────────────────
 function getLeaderboard() {
   const members = getMembers_();
   const rollsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.ROLLS);
@@ -391,13 +485,10 @@ function getLeaderboard() {
     ? sessionsSheet.getRange(2, 1, sessionsSheet.getLastRow() - 1, 4).getValues()
     : [];
 
-  // Build session date map
   const sessDateMap = {};
   sessData.forEach(r => { sessDateMap[r[0]] = r[1]; });
 
   const qinfo = currentQuarter_();
-
-  // Aggregate per member for current quarter
   const totals = {}, counts = {};
   members.forEach(m => { totals[m.name] = 0; counts[m.name] = 0; });
 
@@ -406,21 +497,16 @@ function getLeaderboard() {
     const name = r[1];
     const effectiveRoll = parseFloat(r[5]);
     const present = r[4] === true || r[4] === 'TRUE' || r[4] === 'true';
-
     if (!present || isNaN(effectiveRoll)) return;
     if (!totals.hasOwnProperty(name)) return;
-
     const sessDate = sessDateMap[sessionId];
     if (!sessDate) return;
-    const d = new Date(sessDate);
-    const dq = quarterOf_(d);
+    const dq = quarterOf_(new Date(sessDate));
     if (dq.q !== qinfo.q || dq.y !== qinfo.y) return;
-
     totals[name] += effectiveRoll;
     counts[name]++;
   });
 
-  // Compute global mean for Bayesian
   const allRolls = Object.keys(totals).filter(n => counts[n] > 0);
   const globalMean = allRolls.length > 0
     ? allRolls.reduce((s, n) => s + totals[n], 0) / allRolls.reduce((s, n) => s + counts[n], 0)
@@ -452,16 +538,14 @@ function getLastOrder() {
   return String(orderStr).split(', ').map(s => s.trim()).filter(Boolean);
 }
 
-// ── Quarter helpers ──────────────────────────────────────────
+// ── Quarter helpers ───────────────────────────────────────────
 function currentQuarter_() {
-  const d = new Date();
-  return quarterOf_(d);
+  return quarterOf_(new Date());
 }
 
 function quarterOf_(d) {
   const m = d.getMonth();
-  const q = Math.floor(m / 3) + 1;
-  return { q, y: d.getFullYear() };
+  return { q: Math.floor(m / 3) + 1, y: d.getFullYear() };
 }
 
 function currentQuarterLabel_() {
@@ -469,12 +553,21 @@ function currentQuarterLabel_() {
   return `Q${q} ${y}`;
 }
 
-// ── Poll endpoint (called by client every 3s) ─────────────────
+// ── Poll endpoints ────────────────────────────────────────────
 function poll() {
+  const session = getCurrentSession();
   return {
-    session: getCurrentSession(),
+    session: session ? buildClientSession_(session) : null,
     leaderboard: getLeaderboard(),
     lastOrder: getLastOrder(),
+    members: getMembers_()
+  };
+}
+
+function pollSession() {
+  const session = getCurrentSession();
+  return {
+    session: session ? buildClientSession_(session) : null,
     members: getMembers_()
   };
 }
@@ -489,26 +582,45 @@ function removeFromSession(name) {
     const idx = session.presentNames.indexOf(name);
     if (idx === -1) return { success: false, error: 'Not in session' };
     session.presentNames.splice(idx, 1);
-    delete session.rolls[name];
+
+    // Remove their pending roll row if not yet submitted
+    const sheet = getSessionRollsSheet_();
+    if (sheet.getLastRow() > 1) {
+      const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+      const roundIndex = session.status === 'rolloff' ? session.rolloffRounds.length : 0;
+      for (let i = data.length - 1; i >= 0; i--) {
+        if (String(data[i][0]) === session.sessionId &&
+            String(data[i][1]).toLowerCase() === name.toLowerCase() &&
+            parseInt(data[i][4]) === roundIndex &&
+            String(data[i][5]) === 'pending') {
+          sheet.deleteRow(i + 2);
+          break;
+        }
+      }
+    }
+
+    // Also remove from current rolloff group if applicable
     if (session.rolloffRounds && session.rolloffRounds.length > 0) {
       const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
       currentRound.groups = currentRound.groups
         .map(g => g.filter(n => n !== name))
         .filter(g => g.length > 1);
-      delete currentRound.rolls[name];
     }
+
     setCurrentSession_(session);
-    return { success: true, session: sanitizeSession_(session) };
+    return { success: true, session: buildClientSession_(session) };
   } finally {
     lock.releaseLock();
   }
 }
 
-// ── Cancel session (manager escape hatch) ────────────────────
+// ── Cancel session ────────────────────────────────────────────
 function cancelSession() {
   const lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
+    const session = getCurrentSession();
+    if (session) clearSessionRollRows_(session.sessionId);
     clearSessionState_();
     return { success: true };
   } finally {
@@ -517,16 +629,9 @@ function cancelSession() {
 }
 
 // ── Quarter-end archive ───────────────────────────────────────
-// Called by triggers on the 30th and 31st of every month at 11pm.
-// March, June, September, and December all have at least 30 days,
-// so both triggers will always fire for every quarter-end month.
-// Non-quarter months are filtered out by the check below.
-// The 31st trigger silently does nothing in months with only 30 days.
 function archiveQuarterLeaderboard() {
   const now = new Date();
-  const month = now.getMonth(); // 0-indexed
-
-  // Only run at end of Q1 (March=2), Q2 (June=5), Q3 (Sep=8), Q4 (Dec=11)
+  const month = now.getMonth();
   const quarterEndMonths = [2, 5, 8, 11];
   if (!quarterEndMonths.includes(month)) {
     Logger.log('archiveQuarterLeaderboard: not a quarter-end month, skipping.');
@@ -537,8 +642,6 @@ function archiveQuarterLeaderboard() {
   const quarterKey = `Q${qinfo.q}_${qinfo.y}`;
   const quarterLabel = `Q${qinfo.q} ${qinfo.y} Final Leaderboard`;
 
-  // Check if already archived this quarter (handles the case where both
-  // the 30th and 31st trigger fire in a 31-day month)
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
   if (sheet.getLastRow() > 1) {
     const existing = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat();
@@ -552,15 +655,9 @@ function archiveQuarterLeaderboard() {
   if (!lb || !lb.members) return;
 
   const archivedAt = now.toISOString();
-  const ranked = lb.members.filter(m => m.count > 0);
-
-  ranked.forEach((m, i) => {
+  lb.members.filter(m => m.count > 0).forEach((m, i) => {
     sheet.appendRow([
-      quarterKey,
-      quarterLabel,
-      archivedAt,
-      i + 1,
-      m.name,
+      quarterKey, quarterLabel, archivedAt, i + 1, m.name,
       m.bayesian !== null ? parseFloat(m.bayesian.toFixed(2)) : '',
       m.avg !== null ? parseFloat(m.avg.toFixed(2)) : '',
       m.count
@@ -568,67 +665,47 @@ function archiveQuarterLeaderboard() {
   });
 
   sendArchiveEmail_(quarterLabel, quarterKey);
-  Logger.log(`Archived ${quarterLabel} with ${ranked.length} entries.`);
+  Logger.log(`Archived ${quarterLabel}`);
 }
 
 function sendArchiveEmail_(quarterLabel, quarterKey) {
   try {
     const deploymentUrl = getDeploymentUrl_();
     const historyUrl = deploymentUrl ? `${deploymentUrl}?view=history` : '(open the app and click Past Quarters)';
-
     const subject = `Initiative Roller — ${quarterLabel} is ready`;
-    const body = `Hi,
-
-The ${quarterLabel} has been automatically saved.
-
-View it here:
-${historyUrl}
-
-You can embed the history page in Confluence using the iFrame macro with the URL above.
-
-— Initiative Roller`;
-
+    const body = `Hi,\n\nThe ${quarterLabel} has been automatically saved.\n\nView it here:\n${historyUrl}\n\n— Initiative Roller`;
     GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), subject, body);
-    Logger.log(`Archive email sent for ${quarterLabel}`);
   } catch(e) {
     Logger.log('Failed to send archive email: ' + e.message);
   }
 }
 
 function getDeploymentUrl_() {
-  // Stored once when the trigger is created
-  const props = PropertiesService.getScriptProperties();
-  return props.getProperty('DEPLOYMENT_URL') || '';
+  return PropertiesService.getScriptProperties().getProperty('DEPLOYMENT_URL') || '';
 }
 
-// ── Get past leaderboards (for History page) ──────────────────
+// ── Get past leaderboards ─────────────────────────────────────
 function getPastLeaderboards() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
   if (!sheet || sheet.getLastRow() <= 1) return [];
 
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+  const quarters = {}, quarterOrder = [];
 
-  // Group rows by quarterKey
-  const quarters = {};
-  const quarterOrder = [];
   data.forEach(r => {
-    const quarterKey   = String(r[0]);
-    const quarterLabel = String(r[1]);
-    const archivedAt   = String(r[2]);
-    const rank         = parseInt(r[3]);
-    const name         = String(r[4]);
-    const bayesian     = r[5] !== '' ? parseFloat(r[5]) : null;
-    const rawAvg       = r[6] !== '' ? parseFloat(r[6]) : null;
-    const count        = parseInt(r[7]);
-
+    const quarterKey = String(r[0]);
     if (!quarters[quarterKey]) {
-      quarters[quarterKey] = { quarterKey, quarterLabel, archivedAt, members: [] };
+      quarters[quarterKey] = { quarterKey, quarterLabel: String(r[1]), archivedAt: String(r[2]), members: [] };
       quarterOrder.push(quarterKey);
     }
-    quarters[quarterKey].members.push({ rank, name, bayesian, rawAvg, count });
+    quarters[quarterKey].members.push({
+      rank: parseInt(r[3]), name: String(r[4]),
+      bayesian: r[5] !== '' ? parseFloat(r[5]) : null,
+      rawAvg: r[6] !== '' ? parseFloat(r[6]) : null,
+      count: parseInt(r[7])
+    });
   });
 
-  // Return in chronological order (Q1 2025 before Q2 2025, etc.)
   return quarterOrder
     .sort((a, b) => {
       const [qa, ya] = parseQuarterKey_(a);
@@ -639,67 +716,53 @@ function getPastLeaderboards() {
 }
 
 function parseQuarterKey_(key) {
-  // Format: Q1_2025
   const m = key.match(/Q(\d)_(\d{4})/);
   return m ? [parseInt(m[1]), parseInt(m[2])] : [0, 0];
 }
 
 // ── Trigger setup ─────────────────────────────────────────────
-// Run this ONCE from the Apps Script editor after deploying.
-// Creates two triggers (30th and 31st of every month) at 11pm.
-// All four quarter-end months have at least 30 days so both triggers
-// always cover them. The already-archived check prevents double-archiving
-// in 31-day months when both triggers fire.
 function createArchiveTrigger() {
-  // Delete any existing archive triggers first to avoid duplicates
   ScriptApp.getProjectTriggers().forEach(t => {
-    if (t.getHandlerFunction() === 'archiveQuarterLeaderboard') {
-      ScriptApp.deleteTrigger(t);
-    }
+    if (t.getHandlerFunction() === 'archiveQuarterLeaderboard') ScriptApp.deleteTrigger(t);
   });
-
   [30, 31].forEach(day => {
-    ScriptApp.newTrigger('archiveQuarterLeaderboard')
-      .timeBased()
-      .onMonthDay(day)
-      .atHour(23)
-      .create();
+    ScriptApp.newTrigger('archiveQuarterLeaderboard').timeBased().onMonthDay(day).atHour(23).create();
   });
-
   Logger.log('Archive triggers created — fires on the 30th and 31st of every month at 11pm.');
 }
 
-// ── Save deployment URL (run once after deploying) ────────────
 function setDeploymentUrl(url) {
   PropertiesService.getScriptProperties().setProperty('DEPLOYMENT_URL', url);
   Logger.log('Deployment URL saved: ' + url);
 }
 
-// ── Manual archive (for testing or makeup runs) ───────────────
-// Call this from the editor to force-archive the current quarter,
-// regardless of what month it is. Useful for testing.
+// ── Force archive (testing) ───────────────────────────────────
 function forceArchiveCurrentQuarter() {
   const qinfo = currentQuarter_();
   const quarterKey = `Q${qinfo.q}_${qinfo.y}`;
   const quarterLabel = `Q${qinfo.q} ${qinfo.y} Final Leaderboard`;
-
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
   const lb = getLeaderboard();
   if (!lb || !lb.members) { Logger.log('No leaderboard data.'); return; }
-
   const archivedAt = new Date().toISOString();
-  const ranked = lb.members.filter(m => m.count > 0);
-
-  ranked.forEach((m, i) => {
+  lb.members.filter(m => m.count > 0).forEach((m, i) => {
     sheet.appendRow([
-      quarterKey, quarterLabel, archivedAt,
-      i + 1, m.name,
+      quarterKey, quarterLabel, archivedAt, i + 1, m.name,
       m.bayesian !== null ? parseFloat(m.bayesian.toFixed(2)) : '',
       m.avg !== null ? parseFloat(m.avg.toFixed(2)) : '',
       m.count
     ]);
   });
-
   sendArchiveEmail_(quarterLabel, quarterKey);
-  Logger.log(`Force-archived ${quarterLabel} with ${ranked.length} entries.`);
+  Logger.log(`Force-archived ${quarterLabel}`);
+}
+
+// ── Wipe test data ────────────────────────────────────────────
+function wipeSheetsForTesting() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  [SHEET_NAMES.SESSIONS, SHEET_NAMES.ROLLS, SHEET_NAMES.SESSION_STATE, SHEET_NAMES.SESSION_ROLLS, SHEET_NAMES.PAST_LEADERBOARDS].forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (sheet && sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  });
+  Logger.log('Test data wiped. Members sheet left intact.');
 }
