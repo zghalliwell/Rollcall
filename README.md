@@ -6,44 +6,73 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 
 ---
 ---
-
 <details>
 <summary><h1>📋 Release Notes — click to expand</h1></summary>
 
 <br>
 
 <details>
-<summary><strong>May 8, 2026</strong> — Rolloff Screen Overhaul, UI Clarity Updates</summary>
+<summary><strong>May 8, 2026</strong> — Rolloff Screen Overhaul, UI Clarity, Performance, "Still Here?" Idle Pause</summary>
 
 ### Files Updated
-`Index.html` only
+`Code.gs` and `Index.html`
 
-To apply: replace `Index.html` in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**. Your URL stays the same.
+### How to Apply
+
+1. Open your Google Sheet and go to **Extensions > Apps Script**
+2. Replace `Code.gs` — select all, delete, paste the new contents, save
+3. Replace `Index.html` — select all, delete, paste the new contents, save
+4. **Run `bootstrapSheets`** from the function dropdown — this creates the new `SessionRolls` sheet required by the updated backend. It will not overwrite or modify your existing Members, Sessions, Rolls, or PastLeaderboards data. Your team roster is safe.
+5. Go to **Deploy > Manage deployments > pencil icon > New version > Deploy**
+
+Your URL stays the same.
+
+---
+
+### Code.gs
+
+**Per-row roll storage (performance)**
+The biggest change in this release. Previously all session data — including everyone's rolls — was stored as a single JSON blob in one spreadsheet cell. Every submit required reading that cell, modifying it, and writing it back, with a script lock to prevent collisions. When multiple people submitted at the same time, they queued behind each other, causing 15-20 second waits.
+
+Rolls are now stored as individual rows in a new `SessionRolls` sheet, one row per member per round. Each person's submit only touches their own row — no lock needed, no contention. Multiple people can submit simultaneously without any queuing effect.
+
+This requires a new `SessionRolls` sheet, which `bootstrapSheets` will create automatically (see setup instructions above).
+
+**Leaner submit functions**
+`submitRoll` and `submitRolloffRoll` no longer read session state or return a full session object. They write two cells and return a minimal success response. The client navigates to the waiting screen and picks up current state via polling, removing a full sheet read from the submit path.
 
 ---
 
 ### Index.html
 
 **Rolloff screen redesign**
-The roll entry screen now looks completely different during a rolloff so people know they're in one. The heading changes to "R-R-R-R-ROLLOFF!" in gold with a glow effect, a pulsing 🧙 ⚔️ 💥 ⚔️ 🧙 battle line appears below it, and your opponent's name is displayed in a purple pill badge above the input area. A rolloff alert sound plays when you land on the screen.
+The roll entry screen now looks completely different during a rolloff. The heading changes to "R-R-R-R-ROLLOFF!" in gold with a glow effect, a pulsing 🧙 ⚔️ 💥 ⚔️ 🧙 battle line appears below it, and your opponent's name is displayed in a purple pill badge above the input area. A distinct four-tone alert sound plays when you land on the screen.
 
-The waiting screen during a rolloff now shows the same "R-R-R-R-ROLLOFF!" header and emoji line at a smaller size. Each "Tied at X" label is now bold light purple instead of small dim text.
+The waiting screen during a rolloff also shows the same header and emoji line at a smaller size, with each "Tied at X" label in bold light purple.
 
-**Rolloff sound effect**
-A four-tone alert sound plays when a player is routed to the rolloff entry screen, distinct from all other sounds in the app. Useful for people who are multitasking and might not notice the screen has changed.
+**Waiting screen polls every 1 second**
+During an active session the waiting screen now polls every 1 second instead of every 3, making roll submissions and the Let's go! button appear much faster for everyone.
+
+**Removed unnecessary pre-submit polls**
+The Roll for Me button previously fired a full poll before submitting to refresh session state. With the new per-row architecture this is no longer needed, so it was removed — cutting roughly 2-3 seconds off every Roll for Me submission.
+
+The roll entry screen also no longer polls before rendering during normal (non-rolloff) rolls. The pre-poll is only kept for rolloff routing where it is genuinely needed.
+
+**"Still here?" idle pause**
+After 2 minutes of sitting on the home screen without any activity, polling pauses and an overlay appears asking "Are you still there?" with a Continue button and a note to close the tab if done. Clicking Continue resumes polling and resets the 2-minute timer. This prevents people from burning executions by leaving the app open all day as Google only allows a script to have 20,000 excecutions per day and ultiple people leaving the window open polling every 5 seconds could burn through that. 
 
 **UI clarity updates across all screens**
-Added instructional text throughout the app based on team feedback that the flow wasn't always clear:
-- Home screen: leader-only note added under Roll for Initiative; previous roll order moved above the leaderboard
+Added instructional text throughout the app based on team feedback:
+- Home screen: leader-only note under Roll for Initiative; previous roll order moved above the leaderboard
 - Who's Here screen: instruction note added above Start Session
-- Who Are You screen: subtitle is now larger, bolder, and light purple
-- Is This You screen: card description updated to match the actual button label ("Yes, that's me")
-- Roll entry screen: full instruction card explaining both roll options (manual vs Roll for Me)
-- Waiting screen: Roll Status label, subtitle, and Last Checked text are now bold and light purple; leader-only note added above Let's go!
-- Result screen: Today's Speaking Order label is larger and bolder; roll numbers are larger and light purple; note added above Done explaining the session is over and the order persists on the home screen
+- Who Are You screen: subtitle larger, bolder, and light purple
+- Is This You screen: description updated to match the actual button label
+- Roll entry screen: full instruction card explaining both roll options
+- Waiting screen: Roll Status label, subtitle, and Last Checked text bold and light purple; leader-only note above Let's go!
+- Result screen: Today's Speaking Order label larger and bolder; roll numbers larger and light purple; note above Done explaining the order persists on the home screen
 
 **Text color and contrast improvements**
-All instructional and patience note text switched from dim purple to light purple (`--purple-glow`) and made bold throughout. Roll count text in the leaderboard and order numbers in the Last Roll Order list also updated to light purple and bold. Last Roll Order header now matches the Leaderboard header style.
+All instructional and patience note text switched to light purple (`--purple-glow`) and made bold. Roll count text in the leaderboard and order numbers in the Last Roll Order list also updated to light purple and bold.
 
 </details>
 
@@ -81,6 +110,7 @@ The waiting screen during a rolloff now shows each contest as its own clearly la
 
 </details>
 
+---
 ---
 
 ## Features
