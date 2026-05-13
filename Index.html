@@ -171,7 +171,13 @@
 <div id="still-here-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,15,0.95);z-index:2000;align-items:center;justify-content:center;flex-direction:column;padding:2rem;text-align:center;">
   <h1 style="font-size:2.5rem;color:var(--purple-glow);margin-bottom:1.25rem;">Are you still there?</h1>
   <p style="color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;max-width:420px;line-height:1.8;margin-bottom:2rem;">Connection to the back end has paused to preserve resources. To continue with another roll, click Continue. If you're done, please close this tab.</p>
-  <button class="btn-primary btn-large" onclick="stillHereContinue()" style="max-width:320px;">Continue</button>
+  <button class="btn-primary btn-large" onclick="stillHereContinue()" style="max-width:320px;margin-bottom:1.5rem;">Continue</button>
+  <div id="still-here-order" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;width:100%;max-width:320px;text-align:left;">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <h2 style="font-size:1rem;">Last Roll Order</h2>
+    </div>
+    <div id="still-here-order-list"></div>
+  </div>
 </div>
 
 <!-- Fixed sound toggle — visible on every screen -->
@@ -439,6 +445,7 @@ function renderLeaderboard(lb) {
 }
 
 function renderLastOrder(order) {
+  window._lastRollOrder = order || [];
   const card = document.getElementById('prev-order-card');
   const list = document.getElementById('prev-order-list');
   if (!order || order.length === 0) { card.style.display = 'none'; return; }
@@ -718,9 +725,21 @@ function resetHomeInactivityTimer() {
   if (homeInactivityTimer) clearTimeout(homeInactivityTimer);
   homeInactivityTimer = setTimeout(() => {
     stopHomePolling();
+    // Populate last roll order from whatever we have in memory
+    const orderCard = document.getElementById('still-here-order');
+    const orderList = document.getElementById('still-here-order-list');
+    const lastOrder = window._lastRollOrder || [];
+    if (lastOrder.length > 0) {
+      orderList.innerHTML = lastOrder.map((name, i) =>
+        `<div class="prev-order-row"><span class="prev-pos">${i+1}.</span><span>${name}</span></div>`
+      ).join('');
+      orderCard.style.display = 'block';
+    } else {
+      orderCard.style.display = 'none';
+    }
     const overlay = document.getElementById('still-here-overlay');
     overlay.style.display = 'flex';
-  }, 120000); // 2 minutes
+  }, 120000);
 }
 
 function stillHereContinue() {
