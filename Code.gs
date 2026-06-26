@@ -110,10 +110,6 @@ function removeMember(name) {
 }
 
 // ── Session State ─────────────────────────────────────────────
-// SessionState stores lightweight metadata only:
-// sessionId, date, status, presentNames, rolloffRounds, finalOrder
-// Rolls are stored per-row in SessionRolls — no lock needed for submits.
-
 function getStateValue_(key) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSION_STATE);
   if (!sheet || sheet.getLastRow() <= 1) return null;
@@ -152,16 +148,10 @@ function setCurrentSession_(session) {
 }
 
 // ── SessionRolls helpers ──────────────────────────────────────
-// Columns: sessionId | name | roll | rolloffRoll | roundIndex | status
-// status: 'pending' | 'submitted'
-// roundIndex: 0 = initial roll, 1+ = rolloff rounds
-// Each person has one row per round they participate in.
-
 function getSessionRollsSheet_() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSION_ROLLS);
 }
 
-// Write one row per present member when session starts (roundIndex=0)
 function initSessionRollRows_(sessionId, presentNames) {
   const sheet = getSessionRollsSheet_();
   presentNames.forEach(name => {
@@ -169,7 +159,6 @@ function initSessionRollRows_(sessionId, presentNames) {
   });
 }
 
-// Write rolloff rows for a new round
 function initRolloffRows_(sessionId, groups, roundIndex) {
   const sheet = getSessionRollsSheet_();
   groups.flat().forEach(name => {
@@ -177,7 +166,6 @@ function initRolloffRows_(sessionId, groups, roundIndex) {
   });
 }
 
-// Find a specific member's row for this session and round
 function findRollRow_(sessionId, name, roundIndex) {
   const sheet = getSessionRollsSheet_();
   if (sheet.getLastRow() <= 1) return null;
@@ -187,13 +175,12 @@ function findRollRow_(sessionId, name, roundIndex) {
         String(data[i][1]).toLowerCase() === name.toLowerCase() &&
         parseInt(data[i][4]) === roundIndex &&
         String(data[i][5]) === 'pending') {
-      return i + 2; // 1-indexed sheet row
+      return i + 2;
     }
   }
   return null;
 }
 
-// Read all submitted rolls for a session and round
 function getSubmittedRolls_(sessionId, roundIndex) {
   const sheet = getSessionRollsSheet_();
   if (sheet.getLastRow() <= 1) return {};
@@ -209,7 +196,6 @@ function getSubmittedRolls_(sessionId, roundIndex) {
   return result;
 }
 
-// Clean up session rolls rows for a completed session
 function clearSessionRollRows_(sessionId) {
   const sheet = getSessionRollsSheet_();
   if (sheet.getLastRow() <= 1) return;
@@ -247,46 +233,54 @@ function startSession(presentNames) {
   }
 }
 
-// ── Submit a roll — NO LOCK, writes only to the member's own row ──
+// ── Submit a roll — NO LOCK ───────────────────────────────────
 function submitRoll(name, roll) {
-  const session = getCurrentSession();
-  if (!session) return { success: false, error: 'No active session' };
-  if (session.status !== 'rolling') return { success: false, error: 'Not in rolling phase' };
-  if (!session.presentNames.includes(name)) return { success: false, error: 'Not in present list' };
   roll = parseInt(roll);
   if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
 
-  const rowIndex = findRollRow_(session.sessionId, name, 0);
-  if (!rowIndex) return { success: false, error: 'Roll row not found' };
-
   const sheet = getSessionRollsSheet_();
-  sheet.getRange(rowIndex, 3).setValue(roll);
-  sheet.getRange(rowIndex, 6).setValue('submitted');
+  if (!sheet || sheet.getLastRow() <= 1) return { success: false, error: 'No active session' };
 
-  // Return minimal response — client goes to waiting screen and polls for state
-  return { success: true };
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][1]).toLowerCase() === name.toLowerCase() &&
+        parseInt(data[i][4]) === 0 &&
+        String(data[i][5]) === 'pending') {
+      const rowNum = i + 2;
+      sheet.getRange(rowNum, 3).setValue(roll);
+      sheet.getRange(rowNum, 6).setValue('submitted');
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Roll row not found' };
 }
 
 // ── Submit a rolloff roll — NO LOCK ──────────────────────────
 function submitRolloffRoll(name, roll) {
-  const session = getCurrentSession();
-  if (!session || session.status !== 'rolloff') return { success: false, error: 'Not in rolloff phase' };
-  const roundIndex = session.rolloffRounds.length;
   roll = parseInt(roll);
   if (isNaN(roll) || roll < 1 || roll > 20) return { success: false, error: 'Invalid roll' };
 
-  const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
-  const allRolloffNames = currentRound.groups.flat();
-  if (!allRolloffNames.includes(name)) return { success: false, error: 'Not in rolloff' };
-
-  const rowIndex = findRollRow_(session.sessionId, name, roundIndex);
-  if (!rowIndex) return { success: false, error: 'Rolloff row not found' };
-
   const sheet = getSessionRollsSheet_();
-  sheet.getRange(rowIndex, 3).setValue(roll);
-  sheet.getRange(rowIndex, 6).setValue('submitted');
+  if (!sheet || sheet.getLastRow() <= 1) return { success: false, error: 'No active session' };
 
-  // Return minimal response — client goes to waiting screen and polls for state
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  let targetRow = null;
+  let targetRoundIndex = -1;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][1]).toLowerCase() === name.toLowerCase() &&
+        parseInt(data[i][4]) > 0 &&
+        String(data[i][5]) === 'pending') {
+      const ri = parseInt(data[i][4]);
+      if (ri > targetRoundIndex) {
+        targetRoundIndex = ri;
+        targetRow = i + 2;
+      }
+    }
+  }
+  if (!targetRow) return { success: false, error: 'Rolloff row not found' };
+
+  sheet.getRange(targetRow, 3).setValue(roll);
+  sheet.getRange(targetRow, 6).setValue('submitted');
   return { success: true };
 }
 
@@ -308,7 +302,6 @@ function advanceFromRolling() {
       session.status = 'rolloff';
       session.rolloffRounds.push({ groups: tiedGroups });
       setCurrentSession_(session);
-      // Write pending rows for rolloff participants
       initRolloffRows_(session.sessionId, tiedGroups, 1);
       return { success: true, session: buildClientSession_(session) };
     } else {
@@ -336,7 +329,6 @@ function advanceFromRolloff() {
       return { success: false, error: 'Not everyone in rolloff has rolled' };
     }
 
-    // Check for ties within each group independently
     const stillTied = [];
     currentRound.groups.forEach(group => {
       findTiedGroups_(group, rolloffRolls).forEach(t => stillTied.push(t));
@@ -349,7 +341,6 @@ function advanceFromRolloff() {
       initRolloffRows_(session.sessionId, stillTied, nextRoundIndex);
       return { success: true, session: buildClientSession_(session) };
     } else {
-      // Collect all rolls across all rounds
       const initialRolls = getSubmittedRolls_(session.sessionId, 0);
       const allRolloffRounds = [];
       for (let i = 1; i <= roundIndex; i++) {
@@ -389,7 +380,7 @@ function persistSession_(session, initialRolls, allRolloffRounds) {
     }
     const initialRoll = initialRolls[m.name] || '';
     const rolloffRoll = getLastRolloffRollFromRounds_(m.name, allRolloffRounds);
-    const effective = rolloffRoll !== null ? (initialRoll + rolloffRoll) / 2 : initialRoll;
+    const effective = initialRoll; // rolloffs are tiebreakers only, not counted in averages
     rollsSheet.appendRow([session.sessionId, m.name, initialRoll, rolloffRoll || '', true, effective]);
   });
 }
@@ -418,18 +409,14 @@ function computeFinalOrder_(presentNames, initialRolls, allRolloffRounds) {
 }
 
 // ── Build client session object ───────────────────────────────
-// Assembles the session object the client expects, reading live
-// roll data from SessionRolls rather than from the session JSON.
 function buildClientSession_(session, initialRolls, allRolloffRounds) {
   const sessionId = session.sessionId;
   const rounds = session.rolloffRounds || [];
 
-  // Read initial rolls from sheet if not passed in
   if (!initialRolls) {
     initialRolls = getSubmittedRolls_(sessionId, 0);
   }
 
-  // Read all rolloff rounds from sheet if not passed in
   if (!allRolloffRounds) {
     allRolloffRounds = [];
     for (let i = 1; i <= rounds.length; i++) {
@@ -437,7 +424,6 @@ function buildClientSession_(session, initialRolls, allRolloffRounds) {
     }
   }
 
-  // Build rolloffRounds in the format the client expects
   const clientRolloffRounds = rounds.map((round, i) => ({
     groups: round.groups,
     rolls: allRolloffRounds[i] || {}
@@ -512,11 +498,15 @@ function getLeaderboard() {
     ? allRolls.reduce((s, n) => s + totals[n], 0) / allRolls.reduce((s, n) => s + counts[n], 0)
     : 10.5;
 
+  // Dynamic C: use the highest session count on the team this quarter
+  // so that low-attendance members are always weighted against whoever showed up the most
+  const maxCount = allRolls.length > 0 ? Math.max(...allRolls.map(n => counts[n])) : BAYESIAN_C;
+
   const results = members.map(m => {
     const n = m.name;
     const c = counts[n];
     const rawAvg = c > 0 ? totals[n] / c : null;
-    const bayesian = c > 0 ? ((BAYESIAN_C * globalMean + totals[n]) / (BAYESIAN_C + c)) : null;
+    const bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
     return { name: n, avg: rawAvg, bayesian, count: c, defaultPresent: m.defaultPresent };
   }).sort((a, b) => {
     if (a.bayesian === null && b.bayesian === null) return 0;
@@ -583,7 +573,6 @@ function removeFromSession(name) {
     if (idx === -1) return { success: false, error: 'Not in session' };
     session.presentNames.splice(idx, 1);
 
-    // Remove their pending roll row if not yet submitted
     const sheet = getSessionRollsSheet_();
     if (sheet.getLastRow() > 1) {
       const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
@@ -599,7 +588,6 @@ function removeFromSession(name) {
       }
     }
 
-    // Also remove from current rolloff group if applicable
     if (session.rolloffRounds && session.rolloffRounds.length > 0) {
       const currentRound = session.rolloffRounds[session.rolloffRounds.length - 1];
       currentRound.groups = currentRound.groups
