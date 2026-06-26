@@ -12,6 +12,30 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 <br>
 
 <details>
+<summary><strong>June 12, 2026</strong> — Dynamic Bayesian Leaderboard, Rolloff Scores Excluded</summary>
+
+### Files Updated
+`Code.gs` only
+
+To apply: replace `Code.gs` in the Apps Script editor, save, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**. Your URL stays the same. No bootstrapping needed.
+
+---
+
+### Code.gs
+
+**Dynamic Bayesian confidence threshold**
+Previously the leaderboard used a fixed confidence value of 8 when calculating Bayesian averages, meaning someone needed roughly 8 sessions before their score fully reflected their real average. This worked fine in theory but allowed occasional attendees with only a handful of very high rolls to outrank regulars with 25+ sessions.
+
+The confidence value is now dynamic — it automatically equals the highest session count on the team for the current quarter. If your most active member has rolled 28 times, everyone's score is weighted against 28. Someone with 5 sessions gets pulled much harder toward the team mean than someone with 27. As the quarter progresses and everyone accumulates more rolls, the benchmark rises and the penalty for low attendance increases proportionally. The system is fully self-calibrating with no manual tuning needed.
+
+**Rolloff rolls excluded from leaderboard averages**
+Rolloff rolls are now treated as tiebreakers only and no longer factor into leaderboard scores. Previously a session where you rolled a 3 initially and then a 17 in the rolloff would record an effective roll of 10 for leaderboard purposes. Now only the initial roll of 3 is counted. The rolloff column is still saved in the sheet for reference but has no effect on averages.
+
+</details>
+
+---
+
+<details>
 <summary><strong>May 8, 2026</strong> — Rolloff Screen Overhaul, UI Clarity, Performance, "Still Here?" Idle Pause</summary>
 
 ### Files Updated
@@ -59,7 +83,7 @@ The Roll for Me button previously fired a full poll before submitting to refresh
 The roll entry screen also no longer polls before rendering during normal (non-rolloff) rolls. The pre-poll is only kept for rolloff routing where it is genuinely needed.
 
 **"Still here?" idle pause**
-After 2 minutes of sitting on the home screen without any activity, polling pauses and an overlay appears asking "Are you still there?" with a Continue button and a note to close the tab if done. Clicking Continue resumes polling and resets the 2-minute timer. This prevents people from burning executions by leaving the app open all day as Google only allows a script to have 20,000 excecutions per day and ultiple people leaving the window open polling every 5 seconds could burn through that. 
+After 2 minutes of sitting on the home screen without any activity, polling pauses and an overlay appears asking "Are you still there?" with a Continue button and a note to close the tab if done. Clicking Continue resumes polling and resets the 2-minute timer. This prevents people from burning executions by leaving the app open all day as Google only allows a script to have 20,000 executions per day and multiple people leaving the window open polling every 5 seconds could burn through that.
 
 **UI clarity updates across all screens**
 Added instructional text throughout the app based on team feedback:
@@ -109,7 +133,6 @@ The waiting screen during a rolloff now shows each contest as its own clearly la
 </details>
 
 </details>
-
 ---
 ---
 <details>
