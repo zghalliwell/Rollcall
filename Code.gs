@@ -10,7 +10,8 @@ const SHEET_NAMES = {
   ROLLS:             'Rolls',
   SESSION_STATE:     'SessionState',
   SESSION_ROLLS:     'SessionRolls',
-  PAST_LEADERBOARDS: 'PastLeaderboards'
+  PAST_LEADERBOARDS: 'PastLeaderboards',
+  ROLLOFF_STATS:     'RolloffStats'
 };
 
 const BAYESIAN_C = 8;
@@ -51,6 +52,7 @@ function bootstrapSheets() {
   getOrCreateSheet_(SHEET_NAMES.SESSION_STATE,     ['key', 'value']);
   getOrCreateSheet_(SHEET_NAMES.SESSION_ROLLS,     ['sessionId', 'name', 'roll', 'rolloffRoll', 'roundIndex', 'status']);
   getOrCreateSheet_(SHEET_NAMES.PAST_LEADERBOARDS, ['quarterKey', 'quarterLabel', 'archivedAt', 'rank', 'name', 'bayesian', 'rawAvg', 'count']);
+  getOrCreateSheet_(SHEET_NAMES.ROLLOFF_STATS,     ['sessionId', 'name', 'participated', 'won', 'lost']);
 
   const membersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.MEMBERS);
   if (membersSheet.getLastRow() <= 1) {
@@ -383,6 +385,47 @@ function persistSession_(session, initialRolls, allRolloffRounds) {
     const effective = initialRoll; // rolloffs are tiebreakers only, not counted in averages
     rollsSheet.appendRow([session.sessionId, m.name, initialRoll, rolloffRoll || '', true, effective]);
   });
+
+  persistRolloffStats_(session);
+}
+
+// Records, per person who was in any rolloff this session, how many rolloff
+// contests they participated in / won / lost. A "contest" is one group within
+// one rolloff round. You win a contest if you finished ahead of everyone else
+// in that group in the final speaking order, otherwise it counts as a loss.
+// Win/loss tracking is only meaningful going forward (older sessions have no rows).
+function persistRolloffStats_(session) {
+  if (!session.rolloffRounds || session.rolloffRounds.length === 0) return;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const statsSheet = ss.getSheetByName(SHEET_NAMES.ROLLOFF_STATS);
+  if (!statsSheet) return;
+
+  const finalPos = {};
+  session.finalOrder.forEach((name, i) => { finalPos[name] = i; });
+
+  const tally = {}; // name -> { participated, won, lost }
+  function ensure(name) {
+    if (!tally[name]) tally[name] = { participated: 0, won: 0, lost: 0 };
+    return tally[name];
+  }
+
+  session.rolloffRounds.forEach(round => {
+    round.groups.forEach(group => {
+      group.forEach(name => {
+        const rec = ensure(name);
+        rec.participated++;
+        const myPos = finalPos[name];
+        const opponents = group.filter(n => n !== name);
+        const wonContest = opponents.every(opp => (finalPos[opp] === undefined ? true : finalPos[opp] > myPos));
+        if (wonContest) rec.won++; else rec.lost++;
+      });
+    });
+  });
+
+  Object.keys(tally).forEach(name => {
+    const rec = tally[name];
+    statsSheet.appendRow([session.sessionId, name, rec.participated, rec.won, rec.lost]);
+  });
 }
 
 function getLastRolloffRollFromRounds_(name, allRolloffRounds) {
@@ -502,12 +545,21 @@ function getLeaderboard() {
   // so that low-attendance members are always weighted against whoever showed up the most
   const maxCount = allRolls.length > 0 ? Math.max(...allRolls.map(n => counts[n])) : BAYESIAN_C;
 
+  // Attendance penalty: once the top roller has 15+ rolls, anyone who has
+  // attended fewer than 33% of the max gets a flat -3 on their Bayesian score.
+  // Keeps occasional attendees off the podium without removing them from the board.
+  // Below 15 max rolls the penalty is dormant (too early in the quarter to judge).
+  const penaltyActive = maxCount >= 15;
+  const penaltyThreshold = Math.round(maxCount * 0.33);
+
   const results = members.map(m => {
     const n = m.name;
     const c = counts[n];
     const rawAvg = c > 0 ? totals[n] / c : null;
-    const bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
-    return { name: n, avg: rawAvg, bayesian, count: c, defaultPresent: m.defaultPresent };
+    let bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
+    const penalized = penaltyActive && c > 0 && c < penaltyThreshold;
+    if (penalized && bayesian !== null) bayesian -= 3;
+    return { name: n, avg: rawAvg, bayesian, count: c, defaultPresent: m.defaultPresent, penalized };
   }).sort((a, b) => {
     if (a.bayesian === null && b.bayesian === null) return 0;
     if (a.bayesian === null) return 1;
@@ -700,12 +752,90 @@ function getPastLeaderboards() {
       const [qb, yb] = parseQuarterKey_(b);
       return ya !== yb ? ya - yb : qa - qb;
     })
-    .map(key => quarters[key]);
+    .map(key => {
+      const q = quarters[key];
+      q.achievements = getQuarterStats_(key);
+      return q;
+    });
 }
 
 function parseQuarterKey_(key) {
   const m = key.match(/Q(\d)_(\d{4})/);
   return m ? [parseInt(m[1]), parseInt(m[2])] : [0, 0];
+}
+
+// ── Quarter achievement stats ─────────────────────────────────
+// Computes the fun end-of-quarter superlatives for a given quarter.
+// Reads live from the Rolls sheet (nat 20s, nat 1s, sessions attended) and
+// the RolloffStats sheet (rolloff participation / wins / losses).
+// Each stat returns { names: [...], value: n } — names is an array so ties
+// surface everyone tied for the lead. Returns null if there's no data.
+function getQuarterStats_(quarterKey) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rollsSheet = ss.getSheetByName(SHEET_NAMES.ROLLS);
+  const sessionsSheet = ss.getSheetByName(SHEET_NAMES.SESSIONS);
+  const statsSheet = ss.getSheetByName(SHEET_NAMES.ROLLOFF_STATS);
+
+  if (!rollsSheet || rollsSheet.getLastRow() <= 1) return null;
+
+  const [targetQ, targetY] = parseQuarterKey_(quarterKey);
+
+  // Which session IDs belong to this quarter?
+  const quarterSessionIds = {};
+  if (sessionsSheet && sessionsSheet.getLastRow() > 1) {
+    const sessData = sessionsSheet.getRange(2, 1, sessionsSheet.getLastRow() - 1, 4).getValues();
+    sessData.forEach(r => {
+      const d = new Date(r[1]);
+      const dq = quarterOf_(d);
+      if (dq.q === targetQ && dq.y === targetY) quarterSessionIds[String(r[0])] = true;
+    });
+  }
+  if (Object.keys(quarterSessionIds).length === 0) return null;
+
+  const nat20s = {}, nat1s = {}, sessions = {};
+  const bump = (map, name) => { map[name] = (map[name] || 0) + 1; };
+
+  const rollData = rollsSheet.getRange(2, 1, rollsSheet.getLastRow() - 1, 6).getValues();
+  rollData.forEach(r => {
+    if (!quarterSessionIds[String(r[0])]) return;
+    const name = String(r[1]);
+    const present = r[4] === true || r[4] === 'TRUE' || r[4] === 'true';
+    if (!present) return;
+    const initialRoll = parseInt(r[2]);
+    bump(sessions, name);
+    if (initialRoll === 20) bump(nat20s, name);
+    if (initialRoll === 1) bump(nat1s, name);
+  });
+
+  const participated = {}, won = {}, lost = {};
+  if (statsSheet && statsSheet.getLastRow() > 1) {
+    const statData = statsSheet.getRange(2, 1, statsSheet.getLastRow() - 1, 5).getValues();
+    statData.forEach(r => {
+      if (!quarterSessionIds[String(r[0])]) return;
+      const name = String(r[1]);
+      participated[name] = (participated[name] || 0) + (parseInt(r[2]) || 0);
+      won[name]          = (won[name]          || 0) + (parseInt(r[3]) || 0);
+      lost[name]         = (lost[name]         || 0) + (parseInt(r[4]) || 0);
+    });
+  }
+
+  // Returns the top scorer(s). Only counts positive values so a stat nobody
+  // achieved shows no winner rather than everyone tied at zero.
+  function top(map) {
+    const vals = Object.keys(map).filter(n => map[n] > 0);
+    if (vals.length === 0) return { names: [], value: 0 };
+    const max = Math.max.apply(null, vals.map(n => map[n]));
+    return { names: vals.filter(n => map[n] === max).sort(), value: max };
+  }
+
+  return {
+    nat20s:              top(nat20s),
+    nat1s:               top(nat1s),
+    rolloffParticipated: top(participated),
+    rolloffWins:         top(won),
+    rolloffLosses:       top(lost),
+    sessions:            top(sessions)
+  };
 }
 
 // ── Trigger setup ─────────────────────────────────────────────
@@ -745,10 +875,147 @@ function forceArchiveCurrentQuarter() {
   Logger.log(`Force-archived ${quarterLabel}`);
 }
 
+// ── Recalculate a past quarter's leaderboard with current scoring ──
+// Computes the leaderboard for a specific quarter (not just the current one)
+// using the exact same Bayesian + dynamic-C + 33% penalty rules as the live
+// board. Used to retroactively apply scoring changes to archived quarters.
+function computeLeaderboardForQuarter_(targetQ, targetY) {
+  const members = getMembers_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rollsSheet = ss.getSheetByName(SHEET_NAMES.ROLLS);
+  const sessionsSheet = ss.getSheetByName(SHEET_NAMES.SESSIONS);
+  if (!rollsSheet || rollsSheet.getLastRow() <= 1) return [];
+
+  const rollData = rollsSheet.getRange(2, 1, rollsSheet.getLastRow() - 1, 6).getValues();
+  const sessData = sessionsSheet && sessionsSheet.getLastRow() > 1
+    ? sessionsSheet.getRange(2, 1, sessionsSheet.getLastRow() - 1, 4).getValues()
+    : [];
+
+  const sessDateMap = {};
+  sessData.forEach(r => { sessDateMap[r[0]] = r[1]; });
+
+  const totals = {}, counts = {};
+  members.forEach(m => { totals[m.name] = 0; counts[m.name] = 0; });
+
+  rollData.forEach(r => {
+    const sessionId = r[0];
+    const name = r[1];
+    const effectiveRoll = parseFloat(r[5]);
+    const present = r[4] === true || r[4] === 'TRUE' || r[4] === 'true';
+    if (!present || isNaN(effectiveRoll)) return;
+    if (!totals.hasOwnProperty(name)) return;
+    const sessDate = sessDateMap[sessionId];
+    if (!sessDate) return;
+    const dq = quarterOf_(new Date(sessDate));
+    if (dq.q !== targetQ || dq.y !== targetY) return;
+    totals[name] += effectiveRoll;
+    counts[name]++;
+  });
+
+  const allRolls = Object.keys(totals).filter(n => counts[n] > 0);
+  const globalMean = allRolls.length > 0
+    ? allRolls.reduce((s, n) => s + totals[n], 0) / allRolls.reduce((s, n) => s + counts[n], 0)
+    : 10.5;
+
+  const maxCount = allRolls.length > 0 ? Math.max(...allRolls.map(n => counts[n])) : BAYESIAN_C;
+  const penaltyActive = maxCount >= 15;
+  const penaltyThreshold = Math.round(maxCount * 0.33);
+
+  return members.map(m => {
+    const n = m.name;
+    const c = counts[n];
+    const rawAvg = c > 0 ? totals[n] / c : null;
+    let bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
+    const penalized = penaltyActive && c > 0 && c < penaltyThreshold;
+    if (penalized && bayesian !== null) bayesian -= 3;
+    return { name: n, avg: rawAvg, bayesian, count: c, penalized };
+  }).filter(m => m.count > 0).sort((a, b) => {
+    if (a.bayesian === null) return 1;
+    if (b.bayesian === null) return -1;
+    return b.bayesian - a.bayesian;
+  });
+}
+
+// DRY RUN — logs what recalculateArchivedLeaderboards would change, writes nothing.
+// Run this first, read the execution log, confirm the numbers look right.
+function previewRecalculatedLeaderboards() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
+  if (!sheet || sheet.getLastRow() <= 1) { Logger.log('No archived leaderboards found.'); return; }
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+  const quarterKeys = [];
+  data.forEach(r => { const k = String(r[0]); if (quarterKeys.indexOf(k) === -1) quarterKeys.push(k); });
+
+  quarterKeys.forEach(key => {
+    const [q, y] = parseQuarterKey_(key);
+    const recalced = computeLeaderboardForQuarter_(q, y);
+    Logger.log('──────────── ' + key + ' ────────────');
+    recalced.forEach((m, i) => {
+      const oldRow = data.find(r => String(r[0]) === key && String(r[4]) === m.name);
+      const oldBayes = oldRow ? oldRow[5] : '(none)';
+      const pen = m.penalized ? '  [PENALTY -3]' : '';
+      Logger.log(
+        (i + 1) + '. ' + m.name +
+        '  old: ' + oldBayes +
+        '  →  new: ' + (m.bayesian !== null ? m.bayesian.toFixed(2) : '—') +
+        '  (' + m.count + ' rolls)' + pen
+      );
+    });
+  });
+  Logger.log('──────────── DRY RUN COMPLETE — nothing was written ────────────');
+}
+
+// WRITES the recalculated scores into PastLeaderboards, replacing the archived
+// rows for every quarter with freshly computed bayesian/rawAvg/rank values.
+// Run previewRecalculatedLeaderboards first and confirm the log looks right.
+// Make sure you have a backup copy of the PastLeaderboards tab before running.
+function recalculateArchivedLeaderboards() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.PAST_LEADERBOARDS);
+  if (!sheet || sheet.getLastRow() <= 1) { Logger.log('No archived leaderboards found.'); return; }
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+
+  // Preserve the quarterLabel and archivedAt per quarter so we don't lose them
+  const quarterMeta = {};
+  const quarterOrder = [];
+  data.forEach(r => {
+    const key = String(r[0]);
+    if (!quarterMeta[key]) {
+      quarterMeta[key] = { label: String(r[1]), archivedAt: String(r[2]) };
+      quarterOrder.push(key);
+    }
+  });
+
+  // Build the full new set of rows
+  const newRows = [];
+  quarterOrder.forEach(key => {
+    const [q, y] = parseQuarterKey_(key);
+    const recalced = computeLeaderboardForQuarter_(q, y);
+    const meta = quarterMeta[key];
+    recalced.forEach((m, i) => {
+      newRows.push([
+        key, meta.label, meta.archivedAt, i + 1, m.name,
+        m.bayesian !== null ? parseFloat(m.bayesian.toFixed(2)) : '',
+        m.avg !== null ? parseFloat(m.avg.toFixed(2)) : '',
+        m.count
+      ]);
+    });
+  });
+
+  // Clear existing data rows and write the new ones
+  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  if (newRows.length > 0) {
+    sheet.getRange(2, 1, newRows.length, 8).setValues(newRows);
+  }
+  Logger.log('Recalculated ' + quarterOrder.length + ' quarter(s), wrote ' + newRows.length + ' rows.');
+}
+
 // ── Wipe test data ────────────────────────────────────────────
 function wipeSheetsForTesting() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  [SHEET_NAMES.SESSIONS, SHEET_NAMES.ROLLS, SHEET_NAMES.SESSION_STATE, SHEET_NAMES.SESSION_ROLLS, SHEET_NAMES.PAST_LEADERBOARDS].forEach(name => {
+  [SHEET_NAMES.SESSIONS, SHEET_NAMES.ROLLS, SHEET_NAMES.SESSION_STATE, SHEET_NAMES.SESSION_ROLLS, SHEET_NAMES.PAST_LEADERBOARDS, SHEET_NAMES.ROLLOFF_STATS].forEach(name => {
     const sheet = ss.getSheetByName(name);
     if (sheet && sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
   });
