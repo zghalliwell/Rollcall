@@ -163,6 +163,19 @@
 
   .dice-rolling { animation: diceShake 0.9s ease-in-out, diceGlow 0.9s ease-in-out; }
   .result-pop   { animation: resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+  .ach-section { border-top:1px solid var(--border); margin-top:1rem; padding-top:1rem; }
+  .ach-label { font-size:0.75rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--purple-bright); font-weight:600; margin-bottom:0.9rem; }
+  .ach-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+  .ach-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:0.85rem 0.9rem; display:flex; flex-direction:column; gap:3px; }
+  .ach-icon { font-size:1.6rem; line-height:1; margin-bottom:2px; }
+  .ach-name { font-family:'Cinzel',serif; font-size:0.9rem; font-weight:600; color:var(--purple-glow); }
+  .ach-goal { font-size:0.72rem; color:var(--text-dim); letter-spacing:0.03em; }
+  .ach-winner { font-size:0.88rem; color:var(--purple-bright); font-weight:600; margin-top:2px; }
+  .ach-none { font-size:0.82rem; color:var(--text-dim); font-style:italic; margin-top:2px; }
+
+  @media(max-width:560px){ .ach-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  @media(max-width:380px){ .ach-grid{ grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -1308,9 +1321,41 @@ function showHistoryScreen() {
           <span style="font-size:0.75rem;color:var(--text-dim);">Archived ${archivedDate}</span>
         </div>
         ${rows}
+        ${renderAchievementsInline(q.achievements)}
       </div>`;
     }).join('');
   });
+}
+
+function renderAchievementsInline(a) {
+  if (!a) return '';
+
+  const defs = [
+    ['🎲', "Fortune's Favorite",  'Most nat 20\u2019s',       a.nat20s],
+    ['💀', 'Fumble Champion',      'Most nat 1\u2019s',        a.nat1s],
+    ['⚔️', 'Contested Soul',       'Most rolloffs',            a.rolloffParticipated],
+    ['👑', 'Decisive Blade',       'Most rolloff wins',        a.rolloffWins],
+    ['😤', 'The Eternal Second',   'Most rolloff losses',      a.rolloffLosses],
+    ['🛡️', 'Stalwart Companion',   'Most sessions attended',   a.sessions]
+  ];
+
+  const cards = defs.map(([icon, name, goal, stat]) => {
+    const hasWinner = stat && stat.names && stat.names.length > 0;
+    const winnerLine = hasWinner
+      ? `<div class="ach-winner">${stat.names.join(', ')} · ${stat.value}</div>`
+      : `<div class="ach-none">No contenders</div>`;
+    return `<div class="ach-card">
+      <div class="ach-icon">${icon}</div>
+      <div class="ach-name">${name}</div>
+      <div class="ach-goal">${goal}</div>
+      ${winnerLine}
+    </div>`;
+  }).join('');
+
+  return `<div class="ach-section">
+    <div class="ach-label">Quarter Achievements</div>
+    <div class="ach-grid">${cards}</div>
+  </div>`;
 }
 
 // ── Sound Engine ──────────────────────────────────────────────
