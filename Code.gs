@@ -750,7 +750,8 @@ function getPastLeaderboards() {
     .sort((a, b) => {
       const [qa, ya] = parseQuarterKey_(a);
       const [qb, yb] = parseQuarterKey_(b);
-      return ya !== yb ? ya - yb : qa - qb;
+      // Newest quarter first
+      return yb !== ya ? yb - ya : qb - qa;
     })
     .map(key => {
       const q = quarters[key];
