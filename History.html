@@ -42,7 +42,7 @@
   .quarter-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:1.5rem; overflow:hidden; animation:fadeIn 0.3s ease both; }
   .quarter-header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
   .quarter-title { font-family:'Cinzel',serif; font-size:1.2rem; color:var(--purple-glow); font-weight:600; letter-spacing:0.05em; }
-  .quarter-meta { font-size:0.78rem; color:var(--text-dim); }
+  .quarter-meta { font-size:0.78rem; color:var(--text-muted); }
   .quarter-body { padding:0.5rem 1.25rem 1rem; }
 
   .lb-row { display:flex; align-items:center; gap:12px; padding:0.6rem 0; border-bottom:1px solid var(--border); }
@@ -70,9 +70,9 @@
   .ach-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:0.85rem 0.9rem; display:flex; flex-direction:column; gap:3px; }
   .ach-icon { font-size:1.6rem; line-height:1; margin-bottom:2px; }
   .ach-name { font-family:'Cinzel',serif; font-size:0.9rem; font-weight:600; color:var(--purple-glow); }
-  .ach-goal { font-size:0.72rem; color:var(--text-dim); letter-spacing:0.03em; }
+  .ach-goal { font-size:0.72rem; color:var(--text-muted); letter-spacing:0.03em; }
   .ach-winner { font-size:0.88rem; color:var(--purple-bright); font-weight:600; margin-top:2px; }
-  .ach-none { font-size:0.82rem; color:var(--text-dim); font-style:italic; margin-top:2px; }
+  .ach-none { font-size:0.82rem; color:var(--text-muted); font-style:italic; margin-top:2px; }
 
   @media(max-width:560px){ .ach-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); } }
   @media(max-width:380px){ .ach-grid{ grid-template-columns:1fr; } }
@@ -123,7 +123,7 @@ function renderQuarters(quarters) {
         <div style="flex:1;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
             <span style="font-weight:500;font-size:1rem;">${m.name}</span>
-            <span style="font-size:0.75rem;color:var(--text-dim);">${countStr}</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">${countStr}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
