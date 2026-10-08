@@ -229,6 +229,7 @@ function startSession(presentNames) {
     };
     setCurrentSession_(session);
     initSessionRollRows_(sessionId, presentNames);
+    setStateValue_('startingClaim', ''); // session now exists; clear the starting claim
     return { success: true, session: buildClientSession_(session) };
   } finally {
     lock.releaseLock();
@@ -545,11 +546,11 @@ function getLeaderboard() {
   // so that low-attendance members are always weighted against whoever showed up the most
   const maxCount = allRolls.length > 0 ? Math.max(...allRolls.map(n => counts[n])) : BAYESIAN_C;
 
-  // Attendance penalty: once the top roller has 15+ rolls, anyone who has
-  // attended fewer than 33% of the max gets a flat -3 on their Bayesian score.
-  // Keeps occasional attendees off the podium without removing them from the board.
-  // Below 15 max rolls the penalty is dormant (too early in the quarter to judge).
-  const penaltyActive = maxCount >= 15;
+  // Attendance penalty: anyone who has attended fewer than 33% of the top
+  // roller's session count gets a flat -3 on their Bayesian score. Keeps
+  // occasional attendees off the podium without removing them from the board.
+  // Always active — as each sync happens, the people showing up most get the
+  // most accurate standings relative to the leader.
   const penaltyThreshold = Math.round(maxCount * 0.33);
 
   const results = members.map(m => {
@@ -557,7 +558,7 @@ function getLeaderboard() {
     const c = counts[n];
     const rawAvg = c > 0 ? totals[n] / c : null;
     let bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
-    const penalized = penaltyActive && c > 0 && c < penaltyThreshold;
+    const penalized = c > 0 && c < penaltyThreshold;
     if (penalized && bayesian !== null) bayesian -= 3;
     return { name: n, avg: rawAvg, bayesian, count: c, defaultPresent: m.defaultPresent, penalized };
   }).sort((a, b) => {
@@ -596,13 +597,74 @@ function currentQuarterLabel_() {
 }
 
 // ── Poll endpoints ────────────────────────────────────────────
+// ── "Starting session" claim ──────────────────────────────────
+// Bridges the gap between a leader entering the attendance screen and the
+// actual session being created. While the claim is held, everyone else's
+// "Start Session" button on the home screen greys out so only one person can
+// kick off a session at a time. The claim carries the claimer's clientId so
+// their own button doesn't grey out, and a timestamp so a stale claim (leader
+// wandered off mid-attendance) auto-expires after STARTING_CLAIM_TTL_MS.
+const STARTING_CLAIM_TTL_MS = 120000; // 2 minutes
+
+function getStartingClaim_() {
+  const raw = getStateValue_('startingClaim');
+  if (!raw) return null;
+  let claim;
+  try { claim = JSON.parse(raw); } catch(e) { return null; }
+  if (!claim || !claim.at) return null;
+  if (Date.now() - claim.at > STARTING_CLAIM_TTL_MS) {
+    // Expired — clear it
+    setStateValue_('startingClaim', '');
+    return null;
+  }
+  return claim;
+}
+
+function claimStartingSession(clientId) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    // If a real session already exists, no claim needed
+    const session = getCurrentSession();
+    if (session && session.status !== 'complete') {
+      return { success: false, error: 'A session is already in progress' };
+    }
+    const existing = getStartingClaim_();
+    if (existing && existing.clientId !== clientId) {
+      return { success: false, error: 'Someone else is already starting a session' };
+    }
+    setStateValue_('startingClaim', JSON.stringify({ clientId: clientId, at: Date.now() }));
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function releaseStartingSession() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    setStateValue_('startingClaim', '');
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Returns the clientId currently holding the start claim, or '' if none/expired.
+function getStartingClaimId_() {
+  const claim = getStartingClaim_();
+  return claim ? String(claim.clientId) : '';
+}
+
 function poll() {
   const session = getCurrentSession();
   return {
     session: session ? buildClientSession_(session) : null,
     leaderboard: getLeaderboard(),
     lastOrder: getLastOrder(),
-    members: getMembers_()
+    members: getMembers_(),
+    startingClaimId: getStartingClaimId_()
   };
 }
 
@@ -610,7 +672,8 @@ function pollSession() {
   const session = getCurrentSession();
   return {
     session: session ? buildClientSession_(session) : null,
-    members: getMembers_()
+    members: getMembers_(),
+    startingClaimId: getStartingClaimId_()
   };
 }
 
@@ -919,7 +982,6 @@ function computeLeaderboardForQuarter_(targetQ, targetY) {
     : 10.5;
 
   const maxCount = allRolls.length > 0 ? Math.max(...allRolls.map(n => counts[n])) : BAYESIAN_C;
-  const penaltyActive = maxCount >= 15;
   const penaltyThreshold = Math.round(maxCount * 0.33);
 
   return members.map(m => {
@@ -927,7 +989,7 @@ function computeLeaderboardForQuarter_(targetQ, targetY) {
     const c = counts[n];
     const rawAvg = c > 0 ? totals[n] / c : null;
     let bayesian = c > 0 ? ((maxCount * globalMean + totals[n]) / (maxCount + c)) : null;
-    const penalized = penaltyActive && c > 0 && c < penaltyThreshold;
+    const penalized = c > 0 && c < penaltyThreshold;
     if (penalized && bayesian !== null) bayesian -= 3;
     return { name: n, avg: rawAvg, bayesian, count: c, penalized };
   }).filter(m => m.count > 0).sort((a, b) => {
