@@ -12,6 +12,50 @@ Built on Google Apps Script. No server, no hosting fees, no dependencies. One UR
 <br>
 
 <details>
+<summary><strong>October 7, 2026</strong> — Always-On Penalty, Single-Starter Lock, Session Cancel, Polish</summary>
+
+### Files Updated
+`Code.gs` and `Index.html`
+
+To apply: replace both files in the Apps Script editor, save each, then go to **Deploy > Manage deployments > pencil icon > New version > Deploy**. Your URL stays the same. No bootstrapping needed.
+
+---
+
+### Code.gs
+
+**Attendance penalty is now always active**
+The -3 attendance penalty previously stayed dormant until the top roller hit 15 rolls. That gate is gone — the penalty now applies from the very first sessions of a quarter. The threshold still scales with the leader (anyone below 33% of the top roller's session count is penalized), so early in the quarter when counts are tiny the rounded threshold naturally keeps nobody penalized until there is a meaningful gap. As each sync happens, the people showing up most get the most accurate standings. This was changed in both the live leaderboard and the retroactive recalculation so they stay consistent.
+
+**Single-starter session lock**
+Only one person can start a session at a time now. The moment someone clicks Start Session and enters the attendance screen, a short-lived "starting" claim is set in `SessionState`. The claim carries the starter's client id and a timestamp, auto-expires after 2 minutes (so a leader who closes their tab mid-attendance doesn't lock everyone out), and is cleared automatically when the session actually starts or is cancelled. The poll endpoints now return the current claim holder so other clients can react.
+
+**Past quarters sorted newest-first**
+`getPastLeaderboards` now returns quarters with the most recent first, so the current/latest quarter is always at the top of both the in-app Past Quarters screen and the standalone history page.
+
+---
+
+### Index.html
+
+**"Roll for Initiative" header + renamed button**
+The home screen now shows a "⚔ Roll for Initiative" header with the button beneath it renamed to **Start Session (Leader Only)**, to make it obvious that only the meeting leader needs to click it.
+
+**Single-starter lock with instant feedback**
+When a leader starts a session, everyone else's Start Session button greys out to "Session starting… please wait" so they can't click in and get stuck. A trigger-happy person who clicks at the same moment gets their button greyed out instantly the moment the backend rejects their claim — they stay on the home screen and get pulled into the roll automatically once the leader finishes attendance. Google Apps Script can't push to clients, so this is the fastest feedback possible without a persistent connection.
+
+**Adaptive home polling**
+The home screen used to poll on a fixed interval. It now polls every 3 seconds normally, automatically speeding up to every 1 second the instant it detects a session is being started, then dropping back to 3 seconds once things settle. This makes the lock and the auto-redirect feel nearly instant without polling fast all day and burning through executions.
+
+**Cancel Session button on the active-session screens**
+A small red "✕ Cancel Session" button now sits in the top-left corner of the Who Are You, Is This You, roll entry, and waiting/rolloff screens. It prompts for confirmation, then boots everyone from the session, saves none of that session's data, releases the starting lock, and returns everyone to a clean home screen where a new session can begin. It only ever clears the live session — previous sessions and all historical data are never touched. Everyone else is routed home automatically when the session is cancelled out from under them.
+
+**Contrast fixes**
+The achievement goal line ("Most nat 20s", etc.) and the "No contenders" label were too dim; both are now brighter. The roll count next to each name and the "Archived" date on the past-quarter views were also bumped up for readability.
+
+</details>
+
+---
+
+<details>
 <summary><strong>October 2, 2026</strong> — Attendance Penalty, Quarter Achievements, Retroactive Recalc</summary>
 
 ### Files Updated
@@ -31,7 +75,7 @@ Your URL stays the same.
 ### Code.gs
 
 **Attendance penalty on the leaderboard**
-Occasional attendees with a handful of lucky rolls could still land near the top of the board even after the dynamic Bayesian weighting. There is now an attendance penalty: once the most active member has hit 15 or more rolls in a quarter, anyone who has attended fewer than 33% of that maximum takes a flat -3 on their Bayesian score. This reliably keeps lingerers off the podium without removing them from the board entirely. The penalty stays dormant early in the quarter (below 15 max rolls) since it is too soon to judge attendance, and it self-calibrates as the quarter goes on — if the top roller finishes at 48, the cutoff sits around 16 sessions.
+Occasional attendees with a handful of lucky rolls could still land near the top of the board even after the dynamic Bayesian weighting. There is now an attendance penalty: once the most active member has hit 15 or more rolls in a quarter, anyone who has attended fewer than 33% of that maximum takes a flat -3 on their Bayesian score. This reliably keeps lingerers off the podium without removing them from the board entirely. The penalty stays dormant early in the quarter (below 15 max rolls) since it is too soon to judge attendance, and it self-calibrates as the quarter goes on — if the top roller finishes at 48, the cutoff sits around 16 sessions. (Note: the 15-roll gate was later removed in the October 7 release.)
 
 **Quarter achievements**
 A new `RolloffStats` sheet records rolloff participation, wins, and losses per person each session. A win means you finished ahead of everyone else in your rolloff group in the final order. This data powers six end-of-quarter superlatives (see History.html below). Nat 20s, nat 1s, and sessions-attended are computed live from existing roll data and work retroactively; rolloff wins and losses only begin accumulating from this release forward, since that data was never recorded before.
@@ -211,11 +255,13 @@ The waiting screen during a rolloff now shows each contest as its own clearly la
 ## Features
 
 - Multi-user real-time sessions -- everyone opens the same URL, enters their roll, and the app syncs automatically
+- Single-starter lock -- only the meeting leader can start a session; everyone else's button greys out instantly so no one gets stuck
 - Automatic rolloffs -- ties are handled recursively until fully resolved
 - Built-in dice roller -- cryptographically secure D20 using the Web Crypto API, with animation
-- Bayesian leaderboard -- fair to occasional attendees; weighted against the most active member, with an attendance penalty that keeps lingerers off the podium
+- Bayesian leaderboard -- fair to occasional attendees; weighted against the most active member, with an always-on attendance penalty that keeps lingerers off the podium
 - Quarter achievements -- D&D-themed end-of-quarter superlatives for nat 20s, nat 1s, rolloffs, and attendance
 - Quarterly archiving -- leaderboards are saved automatically at the end of each quarter with an email notification
+- Cancel Session anytime -- a leader can scrap an in-progress session and start over without saving any of its data
 - Confluence embeddable -- standalone leaderboard and history pages for iFrame embedding
 - Sound effects -- optional audio feedback for rolls, submissions, and nat 20s
 - Confetti on nat 20s
@@ -362,15 +408,17 @@ Confluence Cloud may block external iframes by default. If it shows a blank box,
 
 ## How It Works
 
-**Sessions:** One person clicks **Roll for Initiative**, marks attendance, and starts the session. Everyone else on the home screen is redirected automatically within 5 seconds, no refresh needed.
+**Sessions:** One person (the meeting leader) clicks **Start Session (Leader Only)**, marks attendance, and starts the session. Everyone else's button greys out so only one person can start at a time, and they're redirected into the roll automatically once the leader finishes attendance, no refresh needed.
 
 **Rolling:** Each person taps their name, confirms it, and enters their D20 roll. There is an optional "Roll For Me" button that will roll a d20 on screen and submit the result automatically. The waiting screen shows live submission status, updating every second. The **Let's go!** button stays locked until all present members have submitted.
 
 **Rolloffs:** Ties trigger a rolloff round automatically. Only tied players roll again. Repeats until resolved.
 
-**Leaderboard:** Ranked by Bayesian average, weighted against the most active member of the quarter. Occasional attendees with a few lucky rolls won't outrank regulars, and anyone below 33% of the top roller's attendance (once that roller passes 15 rolls) takes a penalty that keeps them off the podium.
+**Cancelling:** Any active-session screen has a small Cancel Session button in the top-left corner. A leader can use it to scrap an in-progress session (for a late joiner, a disconnect, or any mix-up) — it boots everyone back to the home screen, saves none of that session's data, and frees things up to start over. Previous sessions and all history are untouched.
 
-**Quarter achievements:** At the end of each quarter, six D&D-themed superlatives are awarded — most nat 20s, most nat 1s, most rolloffs, most rolloff wins, most rolloff losses, and most sessions attended. They appear under each quarter on the Past Quarters view.
+**Leaderboard:** Ranked by Bayesian average, weighted against the most active member of the quarter. Occasional attendees with a few lucky rolls won't outrank regulars, and anyone below 33% of the top roller's attendance takes an always-on penalty that keeps them off the podium.
+
+**Quarter achievements:** At the end of each quarter, six D&D-themed superlatives are awarded — most nat 20s, most nat 1s, most rolloffs, most rolloff wins, most rolloff losses, and most sessions attended. They appear under each quarter on the Past Quarters view, newest quarter first.
 
 **Archiving:** On the last day of each quarter-end month, the leaderboard is snapshotted to the PastLeaderboards sheet and you receive an email. Past quarters are viewable in the app under **Past Quarters**.
 
@@ -408,7 +456,7 @@ Signed into a corporate Google Workspace account in that browser. Use incognito 
 Deployed version is stale. Go to Deploy > Manage deployments > pencil > New version > Deploy.
 
 **Someone can't find their name on the name picker**
-They weren't marked present when the session started. Use the x button on the waiting screen to remove them and unblock the session, or run `cancelSession` from the editor to start over.
+They weren't marked present when the session started. Use the x button on the waiting screen to remove them and unblock the session, or cancel the session (top-left corner button) and start over.
 
 **Archive email never arrived**
 Check spam. Verify you ran `setDeploymentUrl()` in Step 7. You can also run `forceArchiveCurrentQuarter` manually.
