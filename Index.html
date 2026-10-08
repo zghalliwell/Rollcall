@@ -176,6 +176,10 @@
 
   @media(max-width:560px){ .ach-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); } }
   @media(max-width:380px){ .ach-grid{ grid-template-columns:1fr; } }
+
+  /* Small corner cancel-session button, shown on active-session screens */
+  .corner-cancel { position:fixed; top:12px; left:14px; z-index:500; background:rgba(10,10,15,0.75); border:1px solid var(--red); color:var(--red); border-radius:20px; padding:4px 11px; font-size:0.72rem; font-weight:600; letter-spacing:0.05em; cursor:pointer; font-family:'Rajdhani',sans-serif; backdrop-filter:blur(6px); transition:all 0.2s; }
+  .corner-cancel:hover { background:rgba(224,80,96,0.18); }
 </style>
 </head>
 <body>
@@ -229,9 +233,10 @@
     </div>
   </div>
 
-  <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.4rem;">⚔ Roll for Initiative</button>
+  <h2 style="text-align:center;font-size:1.4rem;margin-bottom:0.6rem;">⚔ Roll for Initiative</h2>
+  <button class="btn-primary btn-large" onclick="showStartRoll()" id="btn-start-roll" style="margin-bottom:0.4rem;">Start Session (Leader Only)</button>
   <p class="patience">May take a few seconds to respond</p>
-  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:1rem;">Only the leader of the meeting needs to click Roll for Initiative</p>
+  <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:1rem;">Only the leader of the meeting needs to click Start Session</p>
 
   <div id="prev-order-card" class="card" style="display:none;">
     <div class="card-header">
@@ -272,11 +277,12 @@
   <button class="btn-primary btn-large" onclick="beginSession()">Start Session</button>
   <p class="patience">May take a few seconds to respond</p>
   <div style="height:0.75rem;"></div>
-  <button class="btn-ghost btn-large" onclick="showScreen('screen-home')">Cancel</button>
+  <button class="btn-ghost btn-large" onclick="cancelStartRoll()">Cancel</button>
 </div>
 
 <!-- NAME PICKER -->
 <div id="screen-namepicker" class="screen">
+  <button class="corner-cancel" onclick="cancelSessionUI()">✕ Cancel Session</button>
   <h1>Who Are You?</h1>
   <p id="namepicker-subtitle" style="text-align:center;color:var(--purple-glow);font-size:1.1rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;margin-bottom:1.5rem;">Tap your name to continue</p>
   <div id="name-button-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.5rem;"></div>
@@ -285,6 +291,7 @@
 
 <!-- NAME CONFIRM -->
 <div id="screen-nameconfirm" class="screen">
+  <button class="corner-cancel" onclick="cancelSessionUI()">✕ Cancel Session</button>
   <h1 style="margin-bottom:1rem;">Is this you?</h1>
   <div id="nameconfirm-card" class="card" style="text-align:center;padding:2rem;">
     <div style="font-family:'Cinzel',serif;font-size:2rem;color:var(--purple-glow);margin-bottom:0.75rem;" id="nameconfirm-name"></div>
@@ -297,6 +304,7 @@
 
 <!-- ENTER YOUR ROLL -->
 <div id="screen-myroll" class="screen">
+  <button class="corner-cancel" onclick="cancelSessionUI()">✕ Cancel Session</button>
   <h1 id="myroll-heading">Enter Your Roll</h1>
   <div id="myroll-battle" style="display:none;"></div>
   <div id="myroll-opponents" style="display:none;"></div>
@@ -328,6 +336,7 @@
 
 <!-- WAITING ROOM -->
 <div id="screen-waiting" class="screen">
+  <button class="corner-cancel" onclick="cancelSessionUI()">✕ Cancel Session</button>
   <h1 id="waiting-title">Waiting for Rolls</h1>
   <p id="waiting-subtitle" style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;margin-bottom:1.5rem;">Everyone needs to submit before continuing</p>
 
@@ -345,9 +354,6 @@
   <p style="text-align:center;color:var(--purple-glow);font-size:0.9rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:0.5rem;">Only the leader of the meeting needs to click Let's Go! once everyone has submitted</p>
   <button class="btn-primary btn-large" id="btn-letsgo" onclick="advanceSession()" disabled>Let's go!</button>
   <p class="patience">May take a few seconds to respond</p>
-  <div style="text-align:center;margin-top:1rem;">
-    <button class="btn-danger" onclick="cancelSessionUI()" style="font-size:0.8rem;letter-spacing:0.05em;">✕ Cancel Session</button>
-  </div>
 </div>
 
 <!-- RESULT -->
@@ -387,6 +393,11 @@ let myName = null;
 let pollTimer = null;
 let pollCount = 0;
 
+// Stable per-tab id so the person starting a session doesn't grey out their
+// own button. Regenerated on each page load, which is fine — it only needs to
+// be unique among people viewing at the same time.
+const CLIENT_ID = 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 // ── GAS RPC ───────────────────────────────────────────────────
 function rpc(fn, args, cb) {
   google.script.run
@@ -414,6 +425,7 @@ function refreshHome() {
     currentSession = data.session;
     renderLeaderboard(data.leaderboard);
     renderLastOrder(data.lastOrder);
+    updateStartButtonLock(data.startingClaimId);
 
     // If there's an active session, redirect to appropriate screen
     if (currentSession && currentSession.status !== 'complete') {
@@ -473,19 +485,64 @@ function showStartRoll() {
   const btn = document.getElementById('btn-start-roll');
   setWorking(btn, true);
   rpc('poll', [], data => {
-    setWorking(btn, false);
-    if (!data) return;
+    if (!data) { setWorking(btn, false); return; }
     members = data.members || [];
     currentSession = data.session;
 
     if (currentSession && currentSession.status !== 'complete') {
+      setWorking(btn, false);
       routeToSessionScreen();
       return;
     }
 
-    renderStartScreen();
-    showScreen('screen-start');
+    // Claim the start so everyone else's button greys out while we pick attendance
+    rpc('claimStartingSession', [CLIENT_ID], claim => {
+      if (claim && claim.success) {
+        // We got the claim — we're the leader for this session
+        setWorking(btn, false);
+        renderStartScreen();
+        showScreen('screen-start');
+        return;
+      }
+      // Claim rejected — someone else beat us to it.
+      if (claim && claim.error === 'A session is already in progress') {
+        // Session already formed — jump straight in
+        setWorking(btn, false);
+        rpc('pollSession', [], d => { if (d) { currentSession = d.session; routeToSessionScreen(); } });
+      } else {
+        // Someone else is mid-start — instantly show the locked state and stay on
+        // the home screen. The normal poll will pull us into the roll once they finish.
+        updateStartButtonLock('_locked_by_other_');
+      }
+    });
   });
+}
+
+// Greys out the home-screen Start Session button when someone else is mid-start.
+// claimId is the clientId currently holding the start, or '' if free.
+function updateStartButtonLock(claimId) {
+  const btn = document.getElementById('btn-start-roll');
+  if (!btn) return;
+  // If we're the holder, or nobody holds it, the button is normal
+  if (!claimId || claimId === CLIENT_ID) {
+    if (btn.dataset.locked === '1') {
+      btn.dataset.locked = '';
+      btn.disabled = false;
+      btn.textContent = 'Start Session (Leader Only)';
+    }
+  } else {
+    btn.dataset.locked = '1';
+    btn.disabled = true;
+    btn.textContent = 'Session starting… please wait';
+  }
+}
+
+// Cancel from the attendance screen — release the start claim so another
+// person can start, then return home.
+function cancelStartRoll() {
+  rpc('releaseStartingSession', [], () => {});
+  showScreen('screen-home');
+  refreshHome();
 }
 
 function renderStartScreen() {
@@ -685,6 +742,15 @@ function submitMyRoll() {
 
   rpc(fn, [myName, v], result => {
     if (!result || !result.success) {
+      // If the session was cancelled while we were rolling, go back to a clean home screen
+      if (result && result.error === 'No active session') {
+        alert('This session was cancelled. Returning to the home screen.');
+        myName = null;
+        currentSession = null;
+        showScreen('screen-home');
+        refreshHome();
+        return;
+      }
       setWorking(submitBtn, false);
       document.getElementById('myroll-error').textContent = result?.error || 'Error submitting roll.';
       document.getElementById('myroll-error').style.display = 'block';
@@ -706,30 +772,51 @@ function showWaitingScreen() {
 }
 
 // ── Home screen polling (auto-redirect when session starts) ──
-let homepollTimer = null;
+// Adaptive: polls every 3s normally, but speeds up to 1s the moment a poll
+// detects someone is starting a session (or one is forming). This makes the
+// "Session starting… please wait" grey-out and the auto-redirect feel almost
+// instant for non-leaders, without burning executions polling fast all day.
+const HOME_POLL_BASE_MS = 3000;
+const HOME_POLL_FAST_MS = 1000;
 let homeInactivityTimer = null;
+let homepolling = null; // setTimeout handle, or null when stopped
 
 function startHomePolling() {
   stopHomePolling();
-  // Reset inactivity timer — show "still here?" after 2 minutes
   resetHomeInactivityTimer();
-  homepolling = setInterval(() => {
-    rpc('poll', [], data => {
-      if (!data) return;
+  homepolling = true; // mark active before the first tick (replaced by a timeout handle after)
+  homePollTick();
+}
+
+function homePollTick() {
+  rpc('poll', [], data => {
+    if (homepolling === null) return; // was stopped while the call was in flight
+    let nextDelay = HOME_POLL_BASE_MS;
+    if (data) {
       members = data.members || [];
       currentSession = data.session;
       renderLeaderboard(data.leaderboard);
       renderLastOrder(data.lastOrder);
+      updateStartButtonLock(data.startingClaimId);
+
       if (currentSession && currentSession.status !== 'complete') {
         stopHomePolling();
         routeToSessionScreen();
+        return;
       }
-    });
-  }, 5000);
+
+      // Speed up while someone else is mid-start so the lock + redirect feel instant
+      const someoneStarting = data.startingClaimId && data.startingClaimId !== CLIENT_ID;
+      if (someoneStarting) nextDelay = HOME_POLL_FAST_MS;
+    }
+    if (homepolling !== null) {
+      homepolling = setTimeout(homePollTick, nextDelay);
+    }
+  });
 }
 
 function stopHomePolling() {
-  if (homepolling && homepolling !== true) { clearInterval(homepolling); }
+  if (homepolling) { clearTimeout(homepolling); }
   homepolling = null;
   if (homeInactivityTimer) { clearTimeout(homeInactivityTimer); homeInactivityTimer = null; }
 }
@@ -759,8 +846,6 @@ function stillHereContinue() {
   document.getElementById('still-here-overlay').style.display = 'none';
   startHomePolling();
 }
-
-let homepolling = null;
 
 function renderWaitingScreen() {
   if (!currentSession) return;
@@ -922,12 +1007,17 @@ function fireConfetti() {
 }
 
 // ── Cancel session UI ─────────────────────────────────────────
+// Boots everyone from the current session without saving any of its data,
+// clears the starting claim, and returns to a clean home screen where anyone
+// can start fresh. Only touches the live session — never historical data.
 function cancelSessionUI() {
-  if (!confirm('Cancel this session? Everyone will be sent back to the home screen.')) return;
+  if (!confirm('Cancel this session? Everyone will be booted and no data from this session will be saved. Previous sessions are not affected.')) return;
+  stopPolling();
   rpc('cancelSession', [], result => {
-    if (!result || !result.success) { alert('Error cancelling session.'); return; }
+    if (!result || !result.success) { alert('Error cancelling session.'); startPolling(); return; }
+    // Reset all client-side session state so this browser starts clean
     currentSession = null;
-    stopPolling();
+    myName = null;
     showScreen('screen-home');
     refreshHome();
   });
@@ -1045,6 +1135,11 @@ function doPoll() {
       stopPolling();
       if (currentSession && currentSession.status === 'complete' && prevStatus !== 'complete') {
         showResultScreen();
+      } else if (!currentSession && prevStatus && prevStatus !== 'complete') {
+        // The session was cancelled out from under us — return to a clean home screen
+        myName = null;
+        showScreen('screen-home');
+        refreshHome();
       }
       return;
     }
@@ -1266,6 +1361,14 @@ function rollForMe() {
       const fn = inRolloff ? 'submitRolloffRoll' : 'submitRoll';
       rpc(fn, [myName, result], rpcResult => {
         if (!rpcResult || !rpcResult.success) {
+          if (rpcResult && rpcResult.error === 'No active session') {
+            alert('This session was cancelled. Returning to the home screen.');
+            myName = null;
+            currentSession = null;
+            showScreen('screen-home');
+            refreshHome();
+            return;
+          }
           document.getElementById('myroll-error').textContent = rpcResult?.error || 'Error submitting roll.';
           document.getElementById('myroll-error').style.display = 'block';
           document.getElementById('btn-submit-roll').disabled = false;
